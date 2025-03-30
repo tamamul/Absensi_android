@@ -32,7 +32,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- Profil Form -->
+        <!-- Form Profil -->
         <androidx.cardview.widget.CardView
             android:id="@+id/cardView"
             android:layout_width="match_parent"
@@ -190,6 +190,7 @@
                     android:hint="Masukkan alamat"
                     android:inputType="textMultiLine"
                     android:lines="3"
+                    android:gravity="top"
                     android:padding="8dp" />
 
             </LinearLayout>

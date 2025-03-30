@@ -22,4 +22,11 @@
     <color name="red_text">#F44336</color>
     <color name="orange_text">#FF9800</color>
     <color name="gray_text">#9E9E9E</color>
+    
+    <!-- Warna Card Status -->
+    <color name="status_hadir">#E8F5E9</color>
+    <color name="status_terlambat">#FFF3E0</color>
+    <color name="status_sakit">#EDE7F6</color>
+    <color name="status_izin">#E3F2FD</color>
+    <color name="status_alpha">#FFEBEE</color>
 </resources>
