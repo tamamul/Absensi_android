@@ -17,7 +17,6 @@ import com.android.volley.Request
 import com.android.volley.Response
 import com.android.volley.toolbox.StringRequest
 import com.android.volley.toolbox.Volley
-import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -124,7 +123,7 @@ class HistoryFragment : Fragment() {
     private fun loadHistory() {
         binding.progressBar.visibility = View.VISIBLE
         
-        val url = getString(R.string.ip_api) + "get_absensi_history.php"
+        val url = getString(R.string.ip_api) + "get_absensi.php"
         
         val stringRequest = object : StringRequest(
             Request.Method.POST, url,
@@ -134,18 +133,19 @@ class HistoryFragment : Fragment() {
                 try {
                     val jsonResponse = JSONObject(response)
                     if (jsonResponse.getBoolean("success")) {
-                        val data = jsonResponse.getJSONArray("data")
+                        val data = jsonResponse.getJSONObject("data")
+                        val absensi = data.getJSONArray("absensi")
                         
                         // Parse data to history items
                         val historyItems = ArrayList<HistoryItem>()
-                        for (i in 0 until data.length()) {
-                            val item = data.getJSONObject(i)
+                        for (i in 0 until absensi.length()) {
+                            val item = absensi.getJSONObject(i)
                             
                             val id = item.getInt("id")
                             val tanggal = item.getString("tanggal")
-                            val jamMasuk = item.getString("jam_masuk")
+                            val jamMasuk = item.optString("jam_masuk", "-")
                             val jamKeluar = item.optString("jam_keluar", "-")
-                            val status = item.getString("status_kehadiran")
+                            val status = item.getString("status")
                             val shift = item.optString("shift", "-")
                             
                             // Format tanggal
@@ -211,84 +211,5 @@ class HistoryFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
-    }
-}
-
-// Data class untuk item riwayat
-data class HistoryItem(
-    val id: Int,
-    val tanggal: String,
-    val jamMasuk: String,
-    val jamKeluar: String,
-    val status: String,
-    val shift: String
-)
-
-// Adapter untuk recycler view riwayat
-class HistoryAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder>() {
-    
-    private val historyList = ArrayList<HistoryItem>()
-    
-    fun setData(newList: List<HistoryItem>) {
-        historyList.clear()
-        historyList.addAll(newList)
-        notifyDataSetChanged()
-    }
-    
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): HistoryViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_history, parent, false)
-        return HistoryViewHolder(view)
-    }
-    
-    override fun onBindViewHolder(holder: HistoryViewHolder, position: Int) {
-        val item = historyList[position]
-        holder.bind(item)
-    }
-    
-    override fun getItemCount(): Int = historyList.size
-    
-    inner class HistoryViewHolder(itemView: View) : androidx.recyclerview.widget.RecyclerView.ViewHolder(itemView) {
-        
-        private val tvTanggal: android.widget.TextView = itemView.findViewById(R.id.tvTanggal)
-        private val tvShift: android.widget.TextView = itemView.findViewById(R.id.tvShift)
-        private val tvJamMasuk: android.widget.TextView = itemView.findViewById(R.id.tvJamMasuk)
-        private val tvJamKeluar: android.widget.TextView = itemView.findViewById(R.id.tvJamKeluar)
-        private val tvStatus: android.widget.TextView = itemView.findViewById(R.id.tvStatus)
-        
-        fun bind(item: HistoryItem) {
-            tvTanggal.text = item.tanggal
-            
-            // Set shift info
-            when (item.shift) {
-                "P" -> tvShift.text = "Shift: Pagi"
-                "S" -> tvShift.text = "Shift: Siang"
-                "M" -> tvShift.text = "Shift: Malam"
-                "L" -> tvShift.text = "Shift: Libur"
-                else -> tvShift.text = "Shift: -"
-            }
-            
-            tvJamMasuk.text = item.jamMasuk
-            tvJamKeluar.text = item.jamKeluar
-            
-            // Set status dengan warna
-            when (item.status) {
-                "hadir" -> {
-                    tvStatus.text = "Hadir"
-                    tvStatus.setTextColor(itemView.context.getColor(R.color.green_text))
-                }
-                "terlambat" -> {
-                    tvStatus.text = "Terlambat"
-                    tvStatus.setTextColor(itemView.context.getColor(R.color.orange_text))
-                }
-                "alpha" -> {
-                    tvStatus.text = "Alpha"
-                    tvStatus.setTextColor(itemView.context.getColor(R.color.red_text))
-                }
-                else -> {
-                    tvStatus.text = "Belum Absen"
-                    tvStatus.setTextColor(itemView.context.getColor(R.color.gray_text))
-                }
-            }
-        }
     }
 }
