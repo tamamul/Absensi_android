@@ -1,0 +1,44 @@
+<resources>
+    <string name="app_name">Absensi Satpam</string>
+    <string name="title_home">Home</string>
+    <string name="title_schedule">Jadwal</string>
+    <string name="title_history">Riwayat</string>
+    <string name="title_profile">Profil</string>
+    <string name="ip_api">http://192.168.0.56/absensi/api_android/</string>
+    
+    <!-- Login dan Register -->
+    <string name="hint_nik">NIK</string>
+    <string name="hint_nip">NIP</string>
+    <string name="hint_nama">Nama Lengkap</string>
+    <string name="btn_login">Masuk</string>
+    <string name="btn_register">Daftar</string>
+    <string name="tv_register">Belum punya akun? Daftar</string>
+    <string name="tv_login">Sudah punya akun? Masuk</string>
+    
+    <!-- Home -->
+    <string name="greeting">Halo, %1$s</string>
+    <string name="shift_info">Shift: %1$s</string>
+    <string name="location_info">Lokasi: %1$s</string>
+    <string name="btn_check_in">Check In</string>
+    <string name="btn_check_out">Check Out</string>
+    <string name="status_in_radius">Anda berada dalam radius %1$s meter</string>
+    <string name="status_out_radius">Anda berada di luar area kerja (%1$s meter)</string>
+    
+    <!-- Jadwal -->
+    <string name="shift_p">Pagi (07.00 - 15.00)</string>
+    <string name="shift_s">Siang (15.00 - 23.00)</string>
+    <string name="shift_m">Malam (23.00 - 07.00)</string>
+    <string name="shift_l">Libur</string>
+    
+    <!-- Profile -->
+    <string name="label_nik">NIK:</string>
+    <string name="label_nip">NIP:</string>
+    <string name="label_nama">Nama:</string>
+    <string name="label_jabatan">Jabatan:</string>
+    <string name="label_lokasi">Lokasi Kerja:</string>
+    <string name="label_no_hp">No. HP:</string>
+    <string name="label_email">Email:</string>
+    <string name="label_alamat">Alamat:</string>
+    <string name="btn_save">Simpan</string>
+    <string name="btn_logout">Keluar</string>
+</resources>
