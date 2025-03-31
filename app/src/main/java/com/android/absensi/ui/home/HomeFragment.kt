@@ -18,13 +18,21 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.android.absensi.R
+import com.android.volley.AuthFailureError
 import com.android.volley.DefaultRetryPolicy
+import com.android.volley.NetworkError
+import com.android.volley.NoConnectionError
+import com.android.volley.ParseError
 import com.android.volley.Request
 import com.android.volley.Response
+import com.android.volley.ServerError
+import com.android.volley.TimeoutError
 import com.android.volley.toolbox.StringRequest
 import com.android.volley.toolbox.Volley
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -34,6 +42,14 @@ import java.util.*
 import kotlin.math.*
 
 class HomeFragment : Fragment() {
+
+    // Enum untuk status lokasi
+    enum class tvLocationStatus {
+        WITHIN_RADIUS,
+        OUTSIDE_RADIUS,
+        LOCATION_ERROR,
+        DETECTING
+    }
 
     private lateinit var homeViewModel: HomeViewModel
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -63,6 +79,10 @@ class HomeFragment : Fragment() {
     // Timer untuk update jam
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var updateTimeRunnable: Runnable
+    
+    // Timer untuk update lokasi dan status dari server
+    private lateinit var locationUpdateRunnable: Runnable
+    private var locationUpdateInterval: Long = 30000 // 30 detik
 
     // URL API
     private lateinit var urlTodayStatus: String
@@ -106,25 +126,44 @@ class HomeFragment : Fragment() {
         // Init location client
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity())
 
-        // Load data user
-        loadUserData()
-
         // Setup views
         setupViews()
+
+        // Load data user
+        loadUserData()
 
         // Request location permission
         checkLocationPermission()
 
         // Update tanggal dan jam
         startTimeUpdates()
+        
+        // Mulai pembaruan lokasi berkala
+        startLocationUpdates()
 
         // Load status absensi hari ini
         loadTodayStatus()
 
         // Setup click listeners
         setupClickListeners()
+        
+        // Tambahkan swipe refresh
+        binding.swipeRefresh.setOnRefreshListener {
+            refreshAllData()
+        }
 
         return root
+    }
+    
+    private fun refreshAllData() {
+        // Ambil lokasi terbaru
+        getCurrentLocation()
+        
+        // Ambil status dari server
+        loadTodayStatus()
+        
+        // Selesai refresh
+        binding.swipeRefresh.isRefreshing = false
     }
 
     private fun loadUserData() {
@@ -135,36 +174,23 @@ class HomeFragment : Fragment() {
         jabatan = sharedPref.getString("jabatan", "") ?: ""
         lokasiKerja = sharedPref.getString("lokasi_nama", "Unknown Location") ?: ""
         
-        // Ambil koordinat dari SharedPreferences
-        val lat = sharedPref.getString("lokasi_latitude", "0.0")?.toDoubleOrNull() ?: 0.0
-        val lng = sharedPref.getString("lokasi_longitude", "0.0")?.toDoubleOrNull() ?: 0.0
-        val radius = sharedPref.getInt("lokasi_radius", 100)
+        // Ambil koordinat asli dari SharedPreferences
+        lokasiLatitude = sharedPref.getString("lokasi_latitude", "0.0")?.toDoubleOrNull() ?: 0.0
+        lokasiLongitude = sharedPref.getString("lokasi_longitude", "0.0")?.toDoubleOrNull() ?: 0.0
+        lokasiRadius = sharedPref.getInt("lokasi_radius", 100)
         
         // Log koordinat untuk debugging
-        Log.d("HomeFragment", "====== DATA LOKASI DARI SHAREDPREF ======")
+        Log.d("HomeFragment", "====== DATA LOKASI ASLI DARI SHAREDPREF ======")
         Log.d("HomeFragment", "Lokasi Kerja: $lokasiKerja")
-        Log.d("HomeFragment", "Latitude: $lat")
-        Log.d("HomeFragment", "Longitude: $lng") 
-        Log.d("HomeFragment", "Radius: $radius meter")
-        
-        // Override koordinat lokasi kerja untuk testing (hapus setelah testing)
-        lokasiLatitude = -7.744757
-        lokasiLongitude = 112.177116
-        lokasiRadius = 5000 // 5km untuk testing
-        
-        Log.d("HomeFragment", "Koordinat Override: $lokasiLatitude, $lokasiLongitude")
-        Log.d("HomeFragment", "Radius Override: $lokasiRadius meter")
+        Log.d("HomeFragment", "Latitude: $lokasiLatitude")
+        Log.d("HomeFragment", "Longitude: $lokasiLongitude") 
+        Log.d("HomeFragment", "Radius: $lokasiRadius meter")
         Log.d("HomeFragment", "========================================")
         
         // Update UI langsung
         binding.tvWelcome.text = "Halo, $nama!"
         binding.tvLokasi.text = "Lokasi: $lokasiKerja"
         binding.tvInfoShift.text = "$lokasiKerja"
-        
-        // Tampilkan informasi lokasi dan koordinat untuk debugging
-        binding.tvStatusLokasi.text = "Lokasi kerja: $lokasiKerja\n" +
-                                     "Koordinat kerja: $lokasiLatitude, $lokasiLongitude\n" +
-                                     "Mendeteksi lokasi Anda..."
         
         // Dapatkan lokasi user saat ini
         getCurrentLocation()
@@ -222,128 +248,128 @@ class HomeFragment : Fragment() {
     }
 
     private fun getCurrentLocation() {
-        if (ActivityCompat.checkSelfPermission(
+        // Cek apakah aplikasi memiliki izin lokasi
+        if (ContextCompat.checkSelfPermission(
                 requireContext(),
                 Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                requireContext(),
-                Manifest.permission.ACCESS_COARSE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+            // Jika belum ada izin, minta izin
             requestLocationPermissions()
             return
         }
 
-        val cancellationToken = CancellationTokenSource()
-        
-        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellationToken.token)
-            .addOnSuccessListener { location ->
-                location?.let {
-                    currentLatitude = it.latitude
-                    currentLongitude = it.longitude
+        try {
+            // Dapatkan lokasi terakhir
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                if (location != null) {
+                    // Simpan lokasi saat ini
+                    currentLatitude = location.latitude
+                    currentLongitude = location.longitude
                     
-                    // Log untuk debugging
-                    Log.d("HomeFragment", "====== KOORDINAT USER DITEMUKAN ======")
-                    Log.d("HomeFragment", "Latitude: $currentLatitude")
-                    Log.d("HomeFragment", "Longitude: $currentLongitude")
+                    // Log lokasi
+                    Log.d("HomeFragment", "Lokasi GPS Saat Ini: Lat=$currentLatitude, Long=$currentLongitude")
                     
-                    // Hitung jarak menggunakan Haversine formula
-                    distanceToLocation = calculateHaversineDistance(
+                    // Juga simpan ke SharedPreferences
+                    val editor = requireActivity().getSharedPreferences("login_data", Context.MODE_PRIVATE).edit()
+                    editor.putString("user_latitude", currentLatitude.toString())
+                    editor.putString("user_longitude", currentLongitude.toString())
+                    editor.apply()
+                    
+                    // Ambil lokasi kerja dari data yang sudah dimuat
+                    val workLatitude = lokasiLatitude
+                    val workLongitude = lokasiLongitude
+                    val workRadius = lokasiRadius.toDouble()
+                    
+                    Log.d("HomeFragment", "Lokasi Kerja: Lat=$workLatitude, Long=$workLongitude, Radius=$workRadius")
+                    
+                    // Hitung jarak
+                    val distance = calculateHaversineDistance(
                         currentLatitude, currentLongitude,
-                        lokasiLatitude, lokasiLongitude
+                        workLatitude, workLongitude
                     )
                     
-                    Log.d("HomeFragment", "Jarak ke lokasi kerja: $distanceToLocation meter")
-                    Log.d("HomeFragment", "Radius lokasi kerja: $lokasiRadius meter")
-                    Log.d("HomeFragment", "=====================================")
+                    // Update tampilan lokasi
+                    updateLocationStatus(distance, workRadius)
+                } else {
+                    // Jika lokasi null, coba ambil dari SharedPreferences
+                    val userLat = requireActivity().getSharedPreferences("login_data", Context.MODE_PRIVATE).getString("user_latitude", "0.0")?.toDoubleOrNull() ?: 0.0
+                    val userLong = requireActivity().getSharedPreferences("login_data", Context.MODE_PRIVATE).getString("user_longitude", "0.0")?.toDoubleOrNull() ?: 0.0
                     
-                    // Cek apakah dalam radius (paksa true untuk testing)
-                    insideRadius = true // Selalu dianggap dalam radius untuk testing
-                    // insideRadius = distanceToLocation <= lokasiRadius
-                    
-                    // Update UI dengan info lokasi
-                    binding.tvStatusLokasi.text = "Lokasi kerja: $lokasiKerja\n" +
-                        "Koordinat kerja: $lokasiLatitude, $lokasiLongitude\n" +
-                        "Koordinat Anda: $currentLatitude, $currentLongitude\n" +
-                        "Jarak: ${String.format("%.2f", distanceToLocation)} meter"
-                    
-                    // Update warna card lokasi
-                    binding.cardLokasi.setCardBackgroundColor(
-                        ContextCompat.getColor(
-                            requireContext(),
-                            if (insideRadius) R.color.status_hadir else R.color.status_alpha
+                    if (userLat != 0.0 && userLong != 0.0) {
+                        currentLatitude = userLat
+                        currentLongitude = userLong
+                        
+                        Log.d("HomeFragment", "Menggunakan lokasi dari SharedPreferences: Lat=$userLat, Long=$userLong")
+                        
+                        // Ambil lokasi kerja
+                        val workLatitude = lokasiLatitude
+                        val workLongitude = lokasiLongitude
+                        val workRadius = lokasiRadius.toDouble()
+                        
+                        Log.d("HomeFragment", "Lokasi Kerja: Lat=$workLatitude, Long=$workLongitude, Radius=$workRadius")
+                        
+                        // Hitung jarak
+                        val distance = calculateHaversineDistance(
+                            currentLatitude, currentLongitude,
+                            workLatitude, workLongitude
                         )
-                    )
-                    
-                    // Perbarui status radius di UI (perbaikan)
-                    val statusText = if (insideRadius) {
-                        "Anda berada dalam radius area kerja ($lokasiRadius meter)"
+                        
+                        // Update tampilan lokasi
+                        updateLocationStatus(distance, workRadius)
                     } else {
-                        "Anda berada di luar area kerja (${String.format("%.0f", distanceToLocation)} meter)"
+                        // Lokasi tidak tersedia
+                        binding.tvStatusLokasi.text = "Tidak dapat memperoleh lokasi"
+                        binding.tvStatusLokasi.setTextColor(ContextCompat.getColor(requireContext(), R.color.red_text))
+                        binding.cardLokasi.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red))
+                        
+                        Log.e("HomeFragment", "Tidak dapat memperoleh lokasi GPS")
+                        Toast.makeText(requireContext(), "Tidak dapat memperoleh lokasi. Aktifkan GPS Anda.", Toast.LENGTH_SHORT).show()
                     }
-                    binding.tvStatusLokasi.text = statusText
-                    
-                    // Update button status
-                    binding.btnCheckIn.isEnabled = !isCheckIn
-                    binding.btnCheckOut.isEnabled = isCheckIn && !isCheckOut
-                } ?: run {
-                    // Jika lokasi null
-                    Log.e("HomeFragment", "Lokasi tidak ditemukan, gunakan nilai default")
-                    
-                    // Set nilai default
-                    currentLatitude = lokasiLatitude
-                    currentLongitude = lokasiLongitude
-                    distanceToLocation = 10.0 // Anggap jarak dekat
-                    insideRadius = true
-                    
-                    // Update UI
-                    binding.tvStatusLokasi.text = "Tidak dapat menemukan lokasi Anda.\n" +
-                        "Menggunakan lokasi default untuk testing."
-                    binding.cardLokasi.setCardBackgroundColor(
-                        ContextCompat.getColor(requireContext(), R.color.status_alpha)
-                    )
-                    
-                    // Tetap aktifkan tombol untuk testing
-                    binding.btnCheckIn.isEnabled = !isCheckIn
-                    binding.btnCheckOut.isEnabled = isCheckIn && !isCheckOut
                 }
+            }.addOnFailureListener { e ->
+                Log.e("HomeFragment", "Gagal mendapatkan lokasi: ${e.message}", e)
+                binding.tvStatusLokasi.text = "Error: Gagal mendapatkan lokasi"
+                binding.tvStatusLokasi.setTextColor(ContextCompat.getColor(requireContext(), R.color.red_text))
+                binding.cardLokasi.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red))
+                Toast.makeText(requireContext(), "Error mendapatkan lokasi: ${e.message}", Toast.LENGTH_SHORT).show()
             }
-            .addOnFailureListener { e ->
-                // Jika gagal mendapatkan lokasi
-                Log.e("HomeFragment", "Error getting location: ${e.message}", e)
-                Toast.makeText(requireContext(), "Gagal mendapatkan lokasi: ${e.message}", Toast.LENGTH_SHORT).show()
-                
-                // Set nilai default
-                currentLatitude = lokasiLatitude
-                currentLongitude = lokasiLongitude
-                distanceToLocation = 10.0 // Anggap jarak dekat
-                insideRadius = true
-                
-                // Update UI
-                binding.tvStatusLokasi.text = "Gagal mendapatkan lokasi. Silakan coba lagi."
-                binding.cardLokasi.setCardBackgroundColor(
-                    ContextCompat.getColor(requireContext(), R.color.status_alpha)
-                )
-                
-                // Tetap aktifkan tombol untuk testing
-                binding.btnCheckIn.isEnabled = !isCheckIn
-                binding.btnCheckOut.isEnabled = isCheckIn && !isCheckOut
-            }
+        } catch (e: Exception) {
+            Log.e("HomeFragment", "Error dalam getCurrentLocation: ${e.message}", e)
+            binding.tvStatusLokasi.text = "Error: ${e.message}"
+            binding.tvStatusLokasi.setTextColor(ContextCompat.getColor(requireContext(), R.color.red_text))
+            binding.cardLokasi.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red))
+        }
     }
 
-    // Fungsi untuk menghitung jarak dengan Haversine formula (fixed)
-    private fun calculateHaversineDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        // Log untuk debugging
-        Log.d("HomeFragment", "Calculating distance from ($lat1, $lon1) to ($lat2, $lon2)")
-        
-        // Validasi koordinat
-        if (lat1 == 0.0 && lon1 == 0.0 || lat2 == 0.0 && lon2 == 0.0) {
-            Log.e("HomeFragment", "KOORDINAT TIDAK VALID! Menggunakan nilai default 10m")
-            return 10.0  // Return jarak default jika koordinat tidak valid
+    // Fungsi untuk update tampilan status lokasi
+    private fun updateLocationStatus(distance: Double, radius: Double) {
+        if (distance <= radius) {
+            binding.tvStatusLokasi.text = "Dalam Radius: ${distance.roundToInt()} meter"
+            binding.tvStatusLokasi.setTextColor(ContextCompat.getColor(requireContext(), R.color.green_text))
+            binding.cardLokasi.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_green))
+        } else {
+            binding.tvStatusLokasi.text = "Di Luar Radius: ${distance.roundToInt()} meter"
+            binding.tvStatusLokasi.setTextColor(ContextCompat.getColor(requireContext(), R.color.red_text))
+            binding.cardLokasi.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red))
         }
+    }
 
+    // Fungsi menghitung jarak Haversine
+    private fun calculateHaversineDistance(
+        lat1: Double, lon1: Double,
+        lat2: Double, lon2: Double
+    ): Double {
+        // Pastikan koordinat valid
+        if (lat1 == 0.0 || lon1 == 0.0 || lat2 == 0.0 || lon2 == 0.0) {
+            Log.e("HomeFragment", "Koordinat tidak valid: ($lat1, $lon1) atau ($lat2, $lon2)")
+            return 99999.0
+        }
+        
         try {
-            val earthRadius = 6371000.0 // radius bumi dalam meter
+            Log.d("HomeFragment", "Menghitung jarak antara ($lat1, $lon1) dan ($lat2, $lon2)")
+            
+            val earthRadius = 6371.0 // Radius bumi dalam kilometer
             
             val dLat = Math.toRadians(lat2 - lat1)
             val dLon = Math.toRadians(lon2 - lon1)
@@ -351,18 +377,16 @@ class HomeFragment : Fragment() {
             val a = sin(dLat / 2) * sin(dLat / 2) +
                     cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
                     sin(dLon / 2) * sin(dLon / 2)
-            
             val c = 2 * atan2(sqrt(a), sqrt(1 - a))
             
-            val distance = earthRadius * c
+            // Jarak dalam kilometer, dikonversi ke meter
+            val distance = earthRadius * c * 1000
             
-            // Log hasil perhitungan
-            Log.d("HomeFragment", "Jarak dihitung: $distance meter")
-            
+            Log.d("HomeFragment", "Jarak terhitung: $distance meter")
             return distance
         } catch (e: Exception) {
-            Log.e("HomeFragment", "Error menghitung jarak: ${e.message}")
-            return 10.0 // Default distance for error case
+            Log.e("HomeFragment", "Error saat menghitung jarak: ${e.message}", e)
+            return 99999.0
         }
     }
 
@@ -382,10 +406,32 @@ class HomeFragment : Fragment() {
         
         handler.post(updateTimeRunnable)
     }
+    
+    private fun startLocationUpdates() {
+        locationUpdateRunnable = object : Runnable {
+            override fun run() {
+                // Ambil lokasi terbaru
+                getCurrentLocation()
+                
+                // Perbarui status dari server (data lokasi kerja bisa berubah)
+                loadTodayStatus()
+                
+                // Jadwalkan pembaruan berikutnya
+                handler.postDelayed(this, locationUpdateInterval)
+                
+                Log.d("HomeFragment", "Pembaruan lokasi dan status otomatis dijalankan")
+            }
+        }
+        
+        // Mulai pembaruan setelah delay awal
+        handler.postDelayed(locationUpdateRunnable, locationUpdateInterval)
+    }
 
     private fun loadTodayStatus() {
-        val stringRequest = @RequiresApi(Build.VERSION_CODES.M)
-        object : StringRequest(
+        // Tampilkan loading
+        binding.tvStatusAbsensi.text = "Memuat status absensi..."
+        
+        val stringRequest = object : StringRequest(
             Request.Method.POST, urlTodayStatus,
             Response.Listener { response ->
                 try {
@@ -397,6 +443,7 @@ class HomeFragment : Fragment() {
                         return@Listener
                     }
                     
+                    Log.d("HomeFragment", "Today Status Response: $response")
                     val jsonResponse = JSONObject(response)
                     val success = jsonResponse.getBoolean("success")
                     
@@ -408,6 +455,24 @@ class HomeFragment : Fragment() {
                         isCheckIn = status.getBoolean("check_in")
                         isCheckOut = status.getBoolean("check_out")
                         statusAbsensi = status.getString("status_kehadiran")
+                        
+                        // PENTING: Ambil data lokasi kerja terbaru dari server
+                        val lokasiKerjaData = data.getJSONObject("lokasi_kerja")
+                        lokasiKerja = lokasiKerjaData.getString("nama")
+                        lokasiLatitude = lokasiKerjaData.getDouble("latitude")
+                        lokasiLongitude = lokasiKerjaData.getDouble("longitude")
+                        lokasiRadius = lokasiKerjaData.getInt("radius")
+                        
+                        // Log data lokasi kerja terbaru
+                        Log.d("HomeFragment", "Data lokasi kerja terbaru dari server:")
+                        Log.d("HomeFragment", "Nama: $lokasiKerja")
+                        Log.d("HomeFragment", "Latitude: $lokasiLatitude")
+                        Log.d("HomeFragment", "Longitude: $lokasiLongitude")
+                        Log.d("HomeFragment", "Radius: $lokasiRadius")
+                        
+                        // Perbarui UI dengan data lokasi kerja terbaru
+                        binding.tvLokasi.text = "Lokasi: $lokasiKerja"
+                        binding.tvInfoShift.text = "$lokasiKerja"
                         
                         // Jadwal
                         val jadwal = data.optJSONObject("jadwal")
@@ -430,38 +495,59 @@ class HomeFragment : Fragment() {
                         // Absensi
                         val absensi = data.optJSONObject("absensi")
                         if (absensi != null) {
-                            jamMasuk = absensi.optString("jam_masuk")
-                            jamKeluar = absensi.optString("jam_keluar")
+                            jamMasuk = absensi.optString("jam_masuk", null)
+                            jamKeluar = absensi.optString("jam_keluar", null)
                             
                             if (!jamMasuk.isNullOrEmpty()) {
                                 binding.tvJamMasuk.text = jamMasuk
+                            } else {
+                                binding.tvJamMasuk.text = "-"
                             }
                             
                             if (!jamKeluar.isNullOrEmpty()) {
                                 binding.tvJamKeluar.text = jamKeluar
+                            } else {
+                                binding.tvJamKeluar.text = "-"
                             }
                             
                             // Status absensi
                             when (statusAbsensi) {
                                 "hadir" -> {
                                     binding.tvStatusAbsensi.text = "Status: Hadir"
-                                    binding.tvStatusAbsensi.setTextColor(resources.getColor(R.color.green_text, null))
+                                    binding.tvStatusAbsensi.setTextColor(ContextCompat.getColor(requireContext(), R.color.green_text))
                                 }
                                 "terlambat" -> {
                                     binding.tvStatusAbsensi.text = "Status: Terlambat"
-                                    binding.tvStatusAbsensi.setTextColor(resources.getColor(R.color.orange_text, null))
+                                    binding.tvStatusAbsensi.setTextColor(ContextCompat.getColor(requireContext(), R.color.orange_text))
                                 }
                                 else -> {
                                     binding.tvStatusAbsensi.text = "Status: Belum Absen"
-                                    binding.tvStatusAbsensi.setTextColor(resources.getColor(R.color.gray_text, null))
+                                    binding.tvStatusAbsensi.setTextColor(ContextCompat.getColor(requireContext(), R.color.gray_text))
                                 }
                             }
+                        } else {
+                            binding.tvJamMasuk.text = "-"
+                            binding.tvJamKeluar.text = "-"
+                            binding.tvStatusAbsensi.text = "Status: Belum Absen"
+                            binding.tvStatusAbsensi.setTextColor(ContextCompat.getColor(requireContext(), R.color.gray_text))
                         }
                         
                         // Update button status
                         updateButtonStatus()
+                        
+                        // Perbarui status lokasi karena data lokasi kerja bisa berubah
+                        if (currentLatitude != 0.0 && currentLongitude != 0.0) {
+                            val distance = calculateHaversineDistance(
+                                currentLatitude, currentLongitude,
+                                lokasiLatitude, lokasiLongitude
+                            )
+                            updateLocationStatus(distance, lokasiRadius.toDouble())
+                        }
                     } else {
                         Toast.makeText(requireContext(), "Gagal memuat status: ${jsonResponse.getString("message")}", Toast.LENGTH_SHORT).show()
+                        binding.tvStatusAbsensi.text = "Status: Gagal memuat data"
+                        binding.tvJamMasuk.text = "-"
+                        binding.tvJamKeluar.text = "-"
                     }
                 } catch (e: Exception) {
                     Log.e("HomeFragment", "Error parsing status response: ${e.message}", e)
@@ -475,11 +561,17 @@ class HomeFragment : Fragment() {
                     }
                     
                     Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_SHORT).show()
+                    binding.tvStatusAbsensi.text = "Status: Error"
+                    binding.tvJamMasuk.text = "-"
+                    binding.tvJamKeluar.text = "-"
                 }
             },
             Response.ErrorListener { error ->
+                Log.e("HomeFragment", "Error loading status: ${error.message}", error)
                 Toast.makeText(requireContext(), "Error: ${error.message}", Toast.LENGTH_SHORT).show()
-                Log.e("HomeFragment", "Error loading status", error)
+                binding.tvStatusAbsensi.text = "Status: Error jaringan"
+                binding.tvJamMasuk.text = "-"
+                binding.tvJamKeluar.text = "-"
             }) {
             override fun getParams(): Map<String, String> {
                 val params = HashMap<String, String>()
@@ -499,120 +591,184 @@ class HomeFragment : Fragment() {
     }
 
     private fun updateButtonStatus() {
-        // Check-in button - enable juga walaupun di luar radius untuk mode bypass
+        // Enable/disable tombol check-in dan check-out berdasarkan status
         binding.btnCheckIn.isEnabled = !isCheckIn
-
-        // Check-out button - enable juga walaupun di luar radius untuk mode bypass
         binding.btnCheckOut.isEnabled = isCheckIn && !isCheckOut
+        
+        // Update warna tombol check-in
+        if (isCheckIn) {
+            binding.btnCheckIn.alpha = 0.5f
+        } else {
+            binding.btnCheckIn.alpha = 1.0f
+        }
+        
+        // Update warna tombol check-out
+        if (!isCheckIn || isCheckOut) {
+            binding.btnCheckOut.alpha = 0.5f
+        } else {
+            binding.btnCheckOut.alpha = 1.0f
+        }
     }
 
     private fun setupClickListeners() {
+        // Tombol check-in
         binding.btnCheckIn.setOnClickListener {
-            doCheckIn()
+            // Ambil lokasi terbaru sebelum check-in
+            getCurrentLocation()
+            
+            // Tampilkan loading dialog
+            val loadingDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("Memproses")
+                .setMessage("Memproses Check-In...")
+                .setCancelable(false)
+                .create()
+                
+            loadingDialog.show()
+            
+            // Pura-pura loading sebentar untuk UX
+            Handler(Looper.getMainLooper()).postDelayed({
+                loadingDialog.dismiss()
+                // Proses check-in
+                proceedCheckIn()
+            }, 1000)
         }
-        
+
+        // Tombol check-out
         binding.btnCheckOut.setOnClickListener {
-            doCheckOut()
+            // Ambil lokasi terbaru sebelum check-out
+            getCurrentLocation()
+            
+            // Tampilkan loading dialog
+            val loadingDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("Memproses")
+                .setMessage("Memproses Check-Out...")
+                .setCancelable(false)
+                .create()
+                
+            loadingDialog.show()
+            
+            // Pura-pura loading sebentar untuk UX
+            Handler(Looper.getMainLooper()).postDelayed({
+                loadingDialog.dismiss()
+                // Proses check-out
+                proceedCheckOut()
+            }, 1000)
         }
     }
 
-    private fun doCheckIn() {
-        // Refresh lokasi terlebih dahulu
-        getCurrentLocation()
+    private fun proceedCheckIn() {
+        // Validasi lokasi
+        if (currentLatitude == 0.0 || currentLongitude == 0.0) {
+            Toast.makeText(requireContext(), "Lokasi tidak valid! Pastikan GPS aktif.", Toast.LENGTH_SHORT).show()
+            getCurrentLocation() // Coba dapatkan lokasi lagi
+            return
+        }
         
-        // Debug: log data yang akan dikirim
-        Log.d("HomeFragment", "Check-In Request dengan data:")
-        Log.d("HomeFragment", "satpam_id: $satpamId")
-        Log.d("HomeFragment", "latitude: $currentLatitude")
-        Log.d("HomeFragment", "longitude: $currentLongitude")
-        Log.d("HomeFragment", "bypass: ${!insideRadius}")
+        // Tampilkan dialog loading
+        val loadingDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Memproses")
+            .setMessage("Memproses check-in...")
+            .setCancelable(false)
+            .create()
+        loadingDialog.show()
         
-        // Cek apakah dalam radius, tapi tetap bisa check-in dengan bypass jika di luar radius
-        val bypass = !insideRadius
+        // Log parameter yang dikirim
+        Log.d("HomeFragment", "Check-in Request - satpam_id: $satpamId, lat: $currentLatitude, long: $currentLongitude")
         
-        val stringRequest = @RequiresApi(Build.VERSION_CODES.M)
-        object : StringRequest(
+        val stringRequest = object : StringRequest(
             Request.Method.POST, urlCheckIn,
             Response.Listener { response ->
+                loadingDialog.dismiss()
+                
                 try {
-                    // Cek apakah respons berisi pesan error HTML
-                    if (response.contains("<br") || response.contains("<b>Fatal error</b>") || 
+                    // Cek apakah respons berisi HTML error
+                    if (response.contains("<br") || response.contains("<b>Fatal error</b>") ||
                         response.contains("Uncaught") || response.contains("Stack trace")) {
-                        Log.e("HomeFragment", "Server mengembalikan error HTML: $response")
+                        Log.e("HomeFragment", "Server mengembalikan HTML error: ${response.take(500)}")
                         Toast.makeText(requireContext(), "Error server: Hubungi administrator", Toast.LENGTH_SHORT).show()
                         return@Listener
                     }
                     
-                    Log.d("HomeFragment", "Check-In Response: $response")
+                    Log.d("HomeFragment", "Check-in Response: $response")
                     val jsonResponse = JSONObject(response)
                     val success = jsonResponse.getBoolean("success")
-                    val message = jsonResponse.getString("message")
-                    
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
                     
                     if (success) {
-                        val data = jsonResponse.getJSONObject("data")
-                        
-                        // Update status
-                        isCheckIn = true
-                        jamMasuk = data.getString("jam_masuk")
-                        statusAbsensi = data.getString("status")
+                        // Check-in berhasil
+                        Toast.makeText(requireContext(), "Check-in berhasil!", Toast.LENGTH_SHORT).show()
                         
                         // Update UI
+                        isCheckIn = true
+                        updateButtonStatus()
+                        
+                        // Ambil data waktu check-in dari response
+                        val data = jsonResponse.getJSONObject("data")
+                        jamMasuk = data.getString("jam_masuk")
+                        
+                        // Update tampilan jam masuk
                         binding.tvJamMasuk.text = jamMasuk
                         
-                        when (statusAbsensi) {
-                            "hadir" -> {
-                                binding.tvStatusAbsensi.text = "Status: Hadir"
-                                binding.tvStatusAbsensi.setTextColor(resources.getColor(R.color.green_text, null))
-                            }
-                            "terlambat" -> {
-                                binding.tvStatusAbsensi.text = "Status: Terlambat"
-                                binding.tvStatusAbsensi.setTextColor(resources.getColor(R.color.orange_text, null))
+                        // Update status absensi jika ada
+                        if (data.has("status")) {
+                            statusAbsensi = data.getString("status")
+                            when (statusAbsensi) {
+                                "hadir" -> {
+                                    binding.tvStatusAbsensi.text = "Status: Hadir"
+                                    binding.tvStatusAbsensi.setTextColor(ContextCompat.getColor(requireContext(), R.color.green_text))
+                                }
+                                "terlambat" -> {
+                                    binding.tvStatusAbsensi.text = "Status: Terlambat"
+                                    binding.tvStatusAbsensi.setTextColor(ContextCompat.getColor(requireContext(), R.color.orange_text))
+                                }
                             }
                         }
                         
-                        // Update button status
-                        updateButtonStatus()
+                        // Reload status untuk memastikan data terbaru
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            loadTodayStatus()
+                        }, 1000)
+                    } else {
+                        // Check-in gagal
+                        val message = jsonResponse.getString("message")
+                        Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+                        
+                        // Log pesan error
+                        Log.e("HomeFragment", "Check-in gagal: $message")
+                        
+                        // Jika ada data tambahan, tampilkan untuk debugging
+                        if (jsonResponse.has("data")) {
+                            val data = jsonResponse.getJSONObject("data")
+                            Log.d("HomeFragment", "Distance data: ${data.toString(2)}")
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("HomeFragment", "Error parsing check-in response: ${e.message}", e)
-                    Log.e("HomeFragment", "Response was: $response")
-                    
-                    // Pesan error lebih detail
-                    val errorMsg = if (response.contains("<br") || response.contains("<b>Fatal error</b>")) {
-                        "Server error: Kontak administrator (error PHP)"
-                    } else {
-                        "Terjadi kesalahan: ${e.message}"
-                    }
-                    
-                    Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_SHORT).show()
+                    Log.e("HomeFragment", "Raw response: $response")
+                    Toast.makeText(requireContext(), "Terjadi kesalahan: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             },
             Response.ErrorListener { error ->
-                Log.e("HomeFragment", "Error check-in: ${error.message}", error)
+                loadingDialog.dismiss()
+                Log.e("HomeFragment", "Error check-in request: ${error.message}", error)
                 
-                // Attempt to get detailed error message
-                val networkResponse = error.networkResponse
-                if (networkResponse != null && networkResponse.data != null) {
-                    try {
-                        val errorResponse = String(networkResponse.data, Charsets.UTF_8)
-                        Log.e("HomeFragment", "Error response data: $errorResponse")
-                    } catch (e: Exception) {
-                        Log.e("HomeFragment", "Unable to parse error response")
-                    }
+                val errorMessage = when (error) {
+                    is TimeoutError -> "Timeout: Server tidak merespon"
+                    is NoConnectionError -> "Tidak ada koneksi internet"
+                    is AuthFailureError -> "Autentikasi gagal"
+                    is ServerError -> "Error server (${error.networkResponse?.statusCode ?: "Unknown"})"
+                    is NetworkError -> "Koneksi jaringan bermasalah"
+                    is ParseError -> "Gagal parsing data"
+                    else -> "Error: ${error.message}"
                 }
                 
-                Toast.makeText(requireContext(), "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_LONG).show()
             }) {
             override fun getParams(): Map<String, String> {
                 val params = HashMap<String, String>()
                 params["satpam_id"] = satpamId.toString()
                 params["latitude"] = currentLatitude.toString()
                 params["longitude"] = currentLongitude.toString()
-                if (bypass) {
-                    params["bypass"] = "true"
-                }
+                params["keterangan"] = ""
                 return params
             }
         }
@@ -623,97 +779,108 @@ class HomeFragment : Fragment() {
             0,     // Tidak ada retry
             DefaultRetryPolicy.DEFAULT_BACKOFF_MULT
         )
-        
-        // Log URL yang diakses
-        Log.d("HomeFragment", "Mengakses URL: $urlCheckIn")
         
         Volley.newRequestQueue(requireContext()).add(stringRequest)
     }
 
-    private fun doCheckOut() {
-        // Refresh lokasi terlebih dahulu
-        getCurrentLocation()
+    private fun proceedCheckOut() {
+        // Validasi lokasi
+        if (currentLatitude == 0.0 || currentLongitude == 0.0) {
+            Toast.makeText(requireContext(), "Lokasi tidak valid! Pastikan GPS aktif.", Toast.LENGTH_SHORT).show()
+            getCurrentLocation() // Coba dapatkan lokasi lagi
+            return
+        }
         
-        // Debug: log data yang akan dikirim
-        Log.d("HomeFragment", "Check-Out Request dengan data:")
-        Log.d("HomeFragment", "satpam_id: $satpamId")
-        Log.d("HomeFragment", "latitude: $currentLatitude")
-        Log.d("HomeFragment", "longitude: $currentLongitude")
-        Log.d("HomeFragment", "bypass: ${!insideRadius}")
+        // Tampilkan dialog loading
+        val loadingDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Memproses")
+            .setMessage("Memproses check-out...")
+            .setCancelable(false)
+            .create()
+        loadingDialog.show()
         
-        // Cek apakah dalam radius, tapi tetap bisa check-out dengan bypass jika di luar radius
-        val bypass = !insideRadius
+        // Log parameter yang dikirim
+        Log.d("HomeFragment", "Check-out Request - satpam_id: $satpamId, lat: $currentLatitude, long: $currentLongitude")
         
         val stringRequest = object : StringRequest(
             Request.Method.POST, urlCheckOut,
             Response.Listener { response ->
+                loadingDialog.dismiss()
+                
                 try {
-                    // Cek apakah respons berisi pesan error HTML
-                    if (response.contains("<br") || response.contains("<b>Fatal error</b>") || 
+                    // Cek apakah respons berisi HTML error
+                    if (response.contains("<br") || response.contains("<b>Fatal error</b>") ||
                         response.contains("Uncaught") || response.contains("Stack trace")) {
-                        Log.e("HomeFragment", "Server mengembalikan error HTML: $response")
+                        Log.e("HomeFragment", "Server mengembalikan HTML error: ${response.take(500)}")
                         Toast.makeText(requireContext(), "Error server: Hubungi administrator", Toast.LENGTH_SHORT).show()
                         return@Listener
                     }
                     
-                    Log.d("HomeFragment", "Check-Out Response: $response")
+                    Log.d("HomeFragment", "Check-out Response: $response")
                     val jsonResponse = JSONObject(response)
                     val success = jsonResponse.getBoolean("success")
-                    val message = jsonResponse.getString("message")
-                    
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
                     
                     if (success) {
-                        val data = jsonResponse.getJSONObject("data")
-                        
-                        // Update status
-                        isCheckOut = true
-                        jamKeluar = data.getString("jam_keluar")
+                        // Check-out berhasil
+                        Toast.makeText(requireContext(), "Check-out berhasil!", Toast.LENGTH_SHORT).show()
                         
                         // Update UI
+                        isCheckOut = true
+                        updateButtonStatus()
+                        
+                        // Ambil data waktu check-out dari response
+                        val data = jsonResponse.getJSONObject("data")
+                        jamKeluar = data.getString("jam_keluar")
+                        
+                        // Update tampilan jam keluar
                         binding.tvJamKeluar.text = jamKeluar
                         
-                        // Update button status
-                        updateButtonStatus()
+                        // Reload status untuk memastikan data terbaru
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            loadTodayStatus()
+                        }, 1000)
+                    } else {
+                        // Check-out gagal
+                        val message = jsonResponse.getString("message")
+                        Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+                        
+                        // Log pesan error
+                        Log.e("HomeFragment", "Check-out gagal: $message")
+                        
+                        // Jika ada data tambahan, tampilkan untuk debugging
+                        if (jsonResponse.has("data")) {
+                            val data = jsonResponse.getJSONObject("data")
+                            Log.d("HomeFragment", "Distance data: ${data.toString(2)}")
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("HomeFragment", "Error parsing check-out response: ${e.message}", e)
-                    Log.e("HomeFragment", "Response was: $response")
-                    
-                    // Pesan error lebih detail
-                    val errorMsg = if (response.contains("<br") || response.contains("<b>Fatal error</b>")) {
-                        "Server error: Kontak administrator (error PHP)"
-                    } else {
-                        "Terjadi kesalahan: ${e.message}"
-                    }
-                    
-                    Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_SHORT).show()
+                    Log.e("HomeFragment", "Raw response: $response")
+                    Toast.makeText(requireContext(), "Terjadi kesalahan: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             },
             Response.ErrorListener { error ->
-                Log.e("HomeFragment", "Error check-out: ${error.message}", error)
+                loadingDialog.dismiss()
+                Log.e("HomeFragment", "Error check-out request: ${error.message}", error)
                 
-                // Attempt to get detailed error message
-                val networkResponse = error.networkResponse
-                if (networkResponse != null && networkResponse.data != null) {
-                    try {
-                        val errorResponse = String(networkResponse.data, Charsets.UTF_8)
-                        Log.e("HomeFragment", "Error response data: $errorResponse")
-                    } catch (e: Exception) {
-                        Log.e("HomeFragment", "Unable to parse error response")
-                    }
+                val errorMessage = when (error) {
+                    is TimeoutError -> "Timeout: Server tidak merespon"
+                    is NoConnectionError -> "Tidak ada koneksi internet"
+                    is AuthFailureError -> "Autentikasi gagal"
+                    is ServerError -> "Error server (${error.networkResponse?.statusCode ?: "Unknown"})"
+                    is NetworkError -> "Koneksi jaringan bermasalah"
+                    is ParseError -> "Gagal parsing data"
+                    else -> "Error: ${error.message}"
                 }
                 
-                Toast.makeText(requireContext(), "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_LONG).show()
             }) {
             override fun getParams(): Map<String, String> {
                 val params = HashMap<String, String>()
                 params["satpam_id"] = satpamId.toString()
                 params["latitude"] = currentLatitude.toString()
                 params["longitude"] = currentLongitude.toString()
-                if (bypass) {
-                    params["bypass"] = "true"
-                }
+                params["keterangan"] = ""
                 return params
             }
         }
@@ -724,16 +891,15 @@ class HomeFragment : Fragment() {
             0,     // Tidak ada retry
             DefaultRetryPolicy.DEFAULT_BACKOFF_MULT
         )
-        
-        // Log URL yang diakses
-        Log.d("HomeFragment", "Mengakses URL: $urlCheckOut")
         
         Volley.newRequestQueue(requireContext()).add(stringRequest)
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
+        // Hentikan semua timer
         handler.removeCallbacks(updateTimeRunnable)
+        handler.removeCallbacks(locationUpdateRunnable)
         _binding = null
     }
 }

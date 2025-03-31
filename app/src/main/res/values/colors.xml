@@ -29,4 +29,8 @@
     <color name="status_sakit">#EDE7F6</color>
     <color name="status_izin">#E3F2FD</color>
     <color name="status_alpha">#FFEBEE</color>
+    
+    <!-- Warna Card Lokasi -->
+    <color name="light_green">#E8F5E9</color>
+    <color name="light_red">#FFEBEE</color>
 </resources>
