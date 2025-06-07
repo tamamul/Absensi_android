@@ -5,7 +5,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 
 class HomeViewModel : ViewModel() {
-    
+
     // Status lokasi
     private val _isWithinRadius = MutableLiveData<Boolean>()
     val isWithinRadius: LiveData<Boolean> = _isWithinRadius

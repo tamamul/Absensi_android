@@ -235,7 +235,7 @@ class ProfileFragment : Fragment() {
                 return params
             }
         }
-        
+
         Volley.newRequestQueue(requireContext()).add(stringRequest)
     }
 

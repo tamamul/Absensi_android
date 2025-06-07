@@ -14,13 +14,13 @@ import com.android.volley.toolbox.Volley
 import org.json.JSONObject
 
 class RegisterActivity : AppCompatActivity() {
-    private lateinit var etNik: EditText
+    private lateinit var etEmail: EditText
     private lateinit var etNip: EditText
     private lateinit var etNama: EditText
     private lateinit var spinnerLokasi: Spinner
     private lateinit var btnRegister: Button
     private lateinit var tvLogin: TextView
-    
+
     private val locationList = ArrayList<LocationData>()
     private var selectedLocationId = 0
 
@@ -35,7 +35,7 @@ class RegisterActivity : AppCompatActivity() {
         supportActionBar?.hide()
 
         // Inisialisasi views
-        etNik = findViewById(R.id.etNik)
+        etEmail = findViewById(R.id.etEmail)
         etNip = findViewById(R.id.etNip)
         etNama = findViewById(R.id.etNama)
         spinnerLokasi = findViewById(R.id.spinnerLokasi)
@@ -118,12 +118,12 @@ class RegisterActivity : AppCompatActivity() {
     }
 
     private fun registerUser() {
-        val nik = etNik.text.toString().trim()
+        val email = etEmail.text.toString().trim()
         val nip = etNip.text.toString().trim()
         val nama = etNama.text.toString().trim()
 
         // Validasi input
-        if (nik.isEmpty() || nip.isEmpty() || nama.isEmpty()) {
+        if (email.isEmpty() || nip.isEmpty() || nama.isEmpty()) {
             Toast.makeText(this, "Mohon isi semua field", Toast.LENGTH_SHORT).show()
             return
         }
@@ -164,7 +164,7 @@ class RegisterActivity : AppCompatActivity() {
             }) {
             override fun getParams(): Map<String, String> {
                 val params = HashMap<String, String>()
-                params["nik"] = nik
+                params["email"] = email
                 params["nip"] = nip
                 params["nama"] = nama
                 params["lokasikerja_id"] = selectedLocationId.toString()

@@ -16,7 +16,7 @@ import com.android.volley.toolbox.Volley
 import org.json.JSONObject
 
 class LoginActivity : AppCompatActivity() {
-    private lateinit var etNik: EditText
+    private lateinit var etEmail: EditText
     private lateinit var etNip: EditText
     private lateinit var btnLogin: Button
     private lateinit var tvRegister: TextView
@@ -36,20 +36,13 @@ class LoginActivity : AppCompatActivity() {
         checkLoginStatus()
 
         // Inisialisasi views
-        etNik = findViewById(R.id.etNik)
+        etEmail = findViewById(R.id.etEmail)
         etNip = findViewById(R.id.etNip)
         btnLogin = findViewById(R.id.btnLogin)
-        tvRegister = findViewById(R.id.tvRegister)
 
         // Handle login button click
         btnLogin.setOnClickListener {
             loginUser()
-        }
-
-        // Handle register text click
-        tvRegister.setOnClickListener {
-            val intent = Intent(this@LoginActivity, RegisterActivity::class.java)
-            startActivity(intent)
         }
     }
 
@@ -67,12 +60,12 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun loginUser() {
-        val nik = etNik.text.toString().trim()
+        val email = etEmail.text.toString().trim()
         val nip = etNip.text.toString().trim()
 
         // Validasi input
-        if (nik.isEmpty() || nip.isEmpty()) {
-            Toast.makeText(this, "Mohon isi NIK dan NIP", Toast.LENGTH_SHORT).show()
+        if (email.isEmpty() || nip.isEmpty()) {
+            Toast.makeText(this, "Mohon isi Email dan NIP", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -90,7 +83,7 @@ class LoginActivity : AppCompatActivity() {
                         val userData = jsonResponse.getJSONObject("data")
                         val id = userData.getInt("id")
                         val nama = userData.getString("nama")
-                        val nik = userData.getString("nik")
+                        val email = userData.getString("email")
                         val nip = userData.getString("nip")
                         val jabatan = userData.getString("jabatan")
                         val foto = userData.optString("foto", "")
@@ -116,7 +109,7 @@ class LoginActivity : AppCompatActivity() {
                         with(sharedPref.edit()) {
                             putInt("id", id)
                             putString("nama", nama)
-                            putString("nik", nik)
+                            putString("email", email)
                             putString("nip", nip)
                             putString("jabatan", jabatan)
                             putString("foto", foto)
@@ -154,7 +147,7 @@ class LoginActivity : AppCompatActivity() {
             }) {
             override fun getParams(): Map<String, String> {
                 val params = HashMap<String, String>()
-                params["nik"] = nik
+                params["email"] = email
                 params["nip"] = nip
                 return params
             }

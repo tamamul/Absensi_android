@@ -9,11 +9,11 @@ class HistoryViewModel : ViewModel() {
     // Data riwayat absensi
     private val _historyItems = MutableLiveData<List<HistoryItem>>()
     val historyItems: LiveData<List<HistoryItem>> = _historyItems
-    
+
     // Loading state
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
-    
+
     // Error message
     private val _errorMessage = MutableLiveData<String>()
     val errorMessage: LiveData<String> = _errorMessage
@@ -47,7 +47,7 @@ class HistoryViewModel : ViewModel() {
         _isEmpty.value = items.isEmpty()
         // Hitung statistik
         calculateStatistics(items)
-    }
+                    }
     
     // Fungsi untuk menghitung statistik
     private fun calculateStatistics(items: List<HistoryItem>) {
@@ -63,7 +63,7 @@ class HistoryViewModel : ViewModel() {
                 "hadir" -> stats["hadir"] = stats["hadir"]!! + 1
                 "terlambat" -> stats["terlambat"] = stats["terlambat"]!! + 1
                 "alpha" -> stats["alpha"] = stats["alpha"]!! + 1
-            }
+                }
         }
         
         _statistics.value = stats
@@ -88,4 +88,4 @@ class HistoryViewModel : ViewModel() {
     fun setErrorMessage(message: String) {
         _errorMessage.value = message
     }
-} 
+}

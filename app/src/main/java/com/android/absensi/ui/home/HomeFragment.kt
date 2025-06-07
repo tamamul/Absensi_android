@@ -430,7 +430,7 @@ class HomeFragment : Fragment() {
     private fun loadTodayStatus() {
         // Tampilkan loading
         binding.tvStatusAbsensi.text = "Memuat status absensi..."
-        
+
         val stringRequest = object : StringRequest(
             Request.Method.POST, urlTodayStatus,
             Response.Listener { response ->
@@ -674,7 +674,7 @@ class HomeFragment : Fragment() {
         
         // Log parameter yang dikirim
         Log.d("HomeFragment", "Check-in Request - satpam_id: $satpamId, lat: $currentLatitude, long: $currentLongitude")
-        
+
         val stringRequest = object : StringRequest(
             Request.Method.POST, urlCheckIn,
             Response.Listener { response ->
