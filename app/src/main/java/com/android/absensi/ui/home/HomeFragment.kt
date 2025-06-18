@@ -94,6 +94,7 @@ class HomeFragment : Fragment() {
     private var currentLongitude: Double = 0.0
     private var distanceToLocation: Double = 0.0
     private var insideRadius = false
+    private var hasJadwalToday = false // Tambahan: status ada jadwal hari ini
 
     // Request location permission
     private val requestPermissionLauncher = registerForActivityResult(
@@ -344,7 +345,8 @@ class HomeFragment : Fragment() {
 
     // Fungsi untuk update tampilan status lokasi
     private fun updateLocationStatus(distance: Double, radius: Double) {
-        if (distance <= radius) {
+        insideRadius = distance <= radius
+        if (insideRadius) {
             binding.tvStatusLokasi.text = "Dalam Radius: ${distance.roundToInt()} meter"
             binding.tvStatusLokasi.setTextColor(ContextCompat.getColor(requireContext(), R.color.green_text))
             binding.cardLokasi.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_green))
@@ -353,6 +355,7 @@ class HomeFragment : Fragment() {
             binding.tvStatusLokasi.setTextColor(ContextCompat.getColor(requireContext(), R.color.red_text))
             binding.cardLokasi.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red))
         }
+        updateButtonStatus()
     }
 
     // Fungsi menghitung jarak Haversine
@@ -479,7 +482,6 @@ class HomeFragment : Fragment() {
                         if (jadwal != null) {
                             shift = jadwal.getString("shift")
                             val jamKerja = jadwal.getString("jam_kerja")
-                            
                             // Set shift info
                             when (shift) {
                                 "P" -> binding.tvShift.text = getString(R.string.shift_p)
@@ -488,8 +490,10 @@ class HomeFragment : Fragment() {
                                 "L" -> binding.tvShift.text = getString(R.string.shift_l)
                                 else -> binding.tvShift.text = "Tidak ada jadwal"
                             }
+                            hasJadwalToday = shift != "-" && shift != "L" && shift.isNotEmpty()
                         } else {
                             binding.tvShift.text = "Tidak ada jadwal"
+                            hasJadwalToday = false
                         }
                         
                         // Absensi
@@ -591,40 +595,37 @@ class HomeFragment : Fragment() {
     }
 
     private fun updateButtonStatus() {
-        // Enable/disable tombol check-in dan check-out berdasarkan status
-        binding.btnCheckIn.isEnabled = !isCheckIn
-        binding.btnCheckOut.isEnabled = isCheckIn && !isCheckOut
-        
-        // Update warna tombol check-in
-        if (isCheckIn) {
-            binding.btnCheckIn.alpha = 0.5f
-        } else {
-            binding.btnCheckIn.alpha = 1.0f
-        }
-        
-        // Update warna tombol check-out
-        if (!isCheckIn || isCheckOut) {
-            binding.btnCheckOut.alpha = 0.5f
-        } else {
-            binding.btnCheckOut.alpha = 1.0f
-        }
+        // Tombol check-in aktif jika belum check-in, dalam radius, dan ada jadwal
+        val enableCheckIn = !isCheckIn && insideRadius && hasJadwalToday
+        // Tombol check-out aktif HANYA jika sudah check-in, belum check-out, dalam radius, dan ada jadwal
+        val enableCheckOut = isCheckIn && !isCheckOut && insideRadius && hasJadwalToday
+        binding.btnCheckIn.isEnabled = enableCheckIn
+        binding.btnCheckOut.isEnabled = enableCheckOut
+        // Update warna tombol
+        binding.btnCheckIn.alpha = if (enableCheckIn) 1.0f else 0.5f
+        binding.btnCheckOut.alpha = if (enableCheckOut) 1.0f else 0.5f
     }
 
     private fun setupClickListeners() {
         // Tombol check-in
         binding.btnCheckIn.setOnClickListener {
+            if (!insideRadius) {
+                Toast.makeText(requireContext(), "Anda di luar radius lokasi kerja!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (!hasJadwalToday) {
+                Toast.makeText(requireContext(), "Tidak ada jadwal hari ini!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             // Ambil lokasi terbaru sebelum check-in
             getCurrentLocation()
-            
             // Tampilkan loading dialog
             val loadingDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
                 .setTitle("Memproses")
                 .setMessage("Memproses Check-In...")
                 .setCancelable(false)
                 .create()
-                
             loadingDialog.show()
-            
             // Pura-pura loading sebentar untuk UX
             Handler(Looper.getMainLooper()).postDelayed({
                 loadingDialog.dismiss()
@@ -632,21 +633,25 @@ class HomeFragment : Fragment() {
                 proceedCheckIn()
             }, 1000)
         }
-
         // Tombol check-out
         binding.btnCheckOut.setOnClickListener {
+            if (!insideRadius) {
+                Toast.makeText(requireContext(), "Anda di luar radius lokasi kerja!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (!hasJadwalToday) {
+                Toast.makeText(requireContext(), "Tidak ada jadwal hari ini!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             // Ambil lokasi terbaru sebelum check-out
             getCurrentLocation()
-            
             // Tampilkan loading dialog
             val loadingDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
                 .setTitle("Memproses")
                 .setMessage("Memproses Check-Out...")
                 .setCancelable(false)
                 .create()
-                
             loadingDialog.show()
-            
             // Pura-pura loading sebentar untuk UX
             Handler(Looper.getMainLooper()).postDelayed({
                 loadingDialog.dismiss()
@@ -663,7 +668,6 @@ class HomeFragment : Fragment() {
             getCurrentLocation() // Coba dapatkan lokasi lagi
             return
         }
-        
         // Tampilkan dialog loading
         val loadingDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle("Memproses")
@@ -671,43 +675,34 @@ class HomeFragment : Fragment() {
             .setCancelable(false)
             .create()
         loadingDialog.show()
-        
         // Log parameter yang dikirim
         Log.d("HomeFragment", "Check-in Request - satpam_id: $satpamId, lat: $currentLatitude, long: $currentLongitude")
-
         val stringRequest = object : StringRequest(
             Request.Method.POST, urlCheckIn,
             Response.Listener { response ->
                 loadingDialog.dismiss()
-                
                 try {
                     // Cek apakah respons berisi HTML error
                     if (response.contains("<br") || response.contains("<b>Fatal error</b>") ||
                         response.contains("Uncaught") || response.contains("Stack trace")) {
-                        Log.e("HomeFragment", "Server mengembalikan HTML error: ${response.take(500)}")
+                        Log.e("HomeFragment", "Server mengembalikan HTML error: "+response.take(500))
                         Toast.makeText(requireContext(), "Error server: Hubungi administrator", Toast.LENGTH_SHORT).show()
                         return@Listener
                     }
-                    
                     Log.d("HomeFragment", "Check-in Response: $response")
                     val jsonResponse = JSONObject(response)
                     val success = jsonResponse.getBoolean("success")
-                    
                     if (success) {
                         // Check-in berhasil
                         Toast.makeText(requireContext(), "Check-in berhasil!", Toast.LENGTH_SHORT).show()
-                        
                         // Update UI
                         isCheckIn = true
-                        updateButtonStatus()
-                        
+                        updateButtonStatus() // Langsung enable tombol check-out
                         // Ambil data waktu check-in dari response
                         val data = jsonResponse.getJSONObject("data")
                         jamMasuk = data.getString("jam_masuk")
-                        
                         // Update tampilan jam masuk
                         binding.tvJamMasuk.text = jamMasuk
-                        
                         // Update status absensi jika ada
                         if (data.has("status")) {
                             statusAbsensi = data.getString("status")
@@ -722,7 +717,6 @@ class HomeFragment : Fragment() {
                                 }
                             }
                         }
-                        
                         // Reload status untuk memastikan data terbaru
                         Handler(Looper.getMainLooper()).postDelayed({
                             loadTodayStatus()
@@ -731,10 +725,8 @@ class HomeFragment : Fragment() {
                         // Check-in gagal
                         val message = jsonResponse.getString("message")
                         Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
-                        
                         // Log pesan error
                         Log.e("HomeFragment", "Check-in gagal: $message")
-                        
                         // Jika ada data tambahan, tampilkan untuk debugging
                         if (jsonResponse.has("data")) {
                             val data = jsonResponse.getJSONObject("data")
@@ -750,7 +742,6 @@ class HomeFragment : Fragment() {
             Response.ErrorListener { error ->
                 loadingDialog.dismiss()
                 Log.e("HomeFragment", "Error check-in request: ${error.message}", error)
-                
                 val errorMessage = when (error) {
                     is TimeoutError -> "Timeout: Server tidak merespon"
                     is NoConnectionError -> "Tidak ada koneksi internet"
@@ -760,7 +751,6 @@ class HomeFragment : Fragment() {
                     is ParseError -> "Gagal parsing data"
                     else -> "Error: ${error.message}"
                 }
-                
                 Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_LONG).show()
             }) {
             override fun getParams(): Map<String, String> {
@@ -772,14 +762,12 @@ class HomeFragment : Fragment() {
                 return params
             }
         }
-        
         // Tambahkan timeout yang lebih panjang
         stringRequest.retryPolicy = DefaultRetryPolicy(
             30000, // 30 detik timeout
             0,     // Tidak ada retry
             DefaultRetryPolicy.DEFAULT_BACKOFF_MULT
         )
-        
         Volley.newRequestQueue(requireContext()).add(stringRequest)
     }
 

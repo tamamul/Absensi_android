@@ -191,7 +191,7 @@
                                     android:layout_height="wrap_content"
                                     android:textSize="18sp"
                                     android:textColor="#4CAF50"
-                                    tools:text="07:30" />
+                                    tools:text="belum checkin" />
                             </LinearLayout>
 
                             <LinearLayout
@@ -212,7 +212,7 @@
                                     android:layout_height="wrap_content"
             android:textSize="18sp"
                                     android:textColor="#F44336"
-                                    tools:text="15:30" />
+                                    tools:text="belum checkout" />
                             </LinearLayout>
     </LinearLayout>
 
