@@ -508,7 +508,7 @@ class HomeFragment : Fragment() {
                                 binding.tvJamMasuk.text = "-"
                             }
                             
-                            if (!jamKeluar.isNullOrEmpty()) {
+                            if (!jamKeluar.isNullOrEmpty() && jamKeluar != "null") {
                                 binding.tvJamKeluar.text = jamKeluar
                             } else {
                                 binding.tvJamKeluar.text = "-"
@@ -821,7 +821,11 @@ class HomeFragment : Fragment() {
                         jamKeluar = data.getString("jam_keluar")
                         
                         // Update tampilan jam keluar
-                        binding.tvJamKeluar.text = jamKeluar
+                        if (!jamKeluar.isNullOrEmpty() && jamKeluar != "null") {
+                            binding.tvJamKeluar.text = jamKeluar
+                        } else {
+                            binding.tvJamKeluar.text = "-"
+                        }
                         
                         // Reload status untuk memastikan data terbaru
                         Handler(Looper.getMainLooper()).postDelayed({
