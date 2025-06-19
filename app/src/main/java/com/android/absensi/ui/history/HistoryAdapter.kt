@@ -6,6 +6,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.annotation.RequiresApi
+import androidx.cardview.widget.CardView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.android.absensi.R
 
@@ -16,7 +18,8 @@ data class HistoryItem(
     val jamMasuk: String,
     val jamKeluar: String,
     val status: String,
-    val shift: String
+    val shift: String,
+    val shiftTime: String = "" // Tambahan untuk waktu shift
 )
 
 // Adapter untuk recycler view riwayat
@@ -45,6 +48,7 @@ class HistoryAdapter : RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder>() 
     
     inner class HistoryViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         
+        private val cardView: CardView = itemView.findViewById(R.id.cardView)
         private val tvTanggal: TextView = itemView.findViewById(R.id.tvTanggal)
         private val tvShift: TextView = itemView.findViewById(R.id.tvShift)
         private val tvJamMasuk: TextView = itemView.findViewById(R.id.tvJamMasuk)
@@ -55,35 +59,51 @@ class HistoryAdapter : RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder>() 
         fun bind(item: HistoryItem) {
             tvTanggal.text = item.tanggal
             
-            // Set shift info
-            when (item.shift) {
-                "P" -> tvShift.text = "Shift: Pagi"
-                "S" -> tvShift.text = "Shift: Siang"
-                "M" -> tvShift.text = "Shift: Malam"
-                "L" -> tvShift.text = "Shift: Libur"
-                else -> tvShift.text = "Shift: -"
+            // Set shift info dengan waktu shift
+            val shiftText = when (item.shift) {
+                "P" -> "Shift Pagi"
+                "S" -> "Shift Siang"
+                "M" -> "Shift Malam"
+                "L" -> "Libur"
+                else -> "Shift: -"
+            }
+            tvShift.text = if (item.shiftTime.isNotEmpty()) {
+                "$shiftText (${item.shiftTime})"
+            } else {
+                shiftText
             }
             
-            tvJamMasuk.text = item.jamMasuk
-            tvJamKeluar.text = item.jamKeluar
+            // Set background color berdasarkan shift
+            val backgroundColor = when (item.shift) {
+                "P" -> R.color.shift_pagi
+                "S" -> R.color.shift_siang
+                "M" -> R.color.shift_malam
+                "L" -> R.color.shift_libur
+                else -> R.color.light_gray
+            }
+            cardView.setCardBackgroundColor(ContextCompat.getColor(itemView.context, backgroundColor))
+            
+            // Format jam masuk/keluar
+            tvJamMasuk.text = if (item.jamMasuk != "null" && item.jamMasuk != "-") item.jamMasuk else "-"
+            tvJamKeluar.text = if (item.jamKeluar != "null" && item.jamKeluar != "-") item.jamKeluar else "-"
             
             // Set status dengan warna
             when (item.status) {
                 "hadir" -> {
                     tvStatus.text = "Hadir"
-                    tvStatus.setTextColor(itemView.context.getColor(R.color.green_text))
+                    tvStatus.setTextColor(ContextCompat.getColor(itemView.context, R.color.green_text))
                 }
                 "terlambat" -> {
                     tvStatus.text = "Terlambat"
-                    tvStatus.setTextColor(itemView.context.getColor(R.color.orange_text))
+                    tvStatus.setTextColor(ContextCompat.getColor(itemView.context, R.color.orange_text))
                 }
                 "alpha" -> {
                     tvStatus.text = "Alpha"
-                    tvStatus.setTextColor(itemView.context.getColor(R.color.red_text))
+                    tvStatus.setTextColor(ContextCompat.getColor(itemView.context, R.color.red_text))
                 }
                 else -> {
                     tvStatus.text = "Belum Absen"
-                    tvStatus.setTextColor(itemView.context.getColor(R.color.gray_text))
+                    tvStatus.setTextColor(ContextCompat.getColor(itemView.context, R.color.gray_text))
                 }
             }
         }

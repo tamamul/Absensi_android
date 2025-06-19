@@ -8,7 +8,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.GridView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
@@ -18,7 +17,6 @@ import com.android.volley.Request
 import com.android.volley.Response
 import com.android.volley.toolbox.StringRequest
 import com.android.volley.toolbox.Volley
-import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -137,31 +135,57 @@ class ScheduleFragment : Fragment() {
                         // Clear previous data
                         scheduleList.clear()
                         
-                        // Fill schedule list
+                        // Temporary map untuk mengelompokkan shift berdasarkan tanggal
+                        val tempScheduleMap = mutableMapOf<String, MutableList<Pair<String, String>>>()
+                        
+                        // Group shifts by date
                         for (i in 0 until jadwal.length()) {
                             val item = jadwal.getJSONObject(i)
                             val tanggal = item.getString("tanggal")
                             val shift = item.getString("shift")
-                            val keterangan = item.getString("keterangan")
+                            val shiftTime = shiftInfo.optString(shift, "-")
                             
-                            // Parse tanggal
+                            if (!tempScheduleMap.containsKey(tanggal)) {
+                                tempScheduleMap[tanggal] = mutableListOf()
+                            }
+                            tempScheduleMap[tanggal]?.add(Pair(shift, shiftTime))
+                        }
+                        
+                        // Convert grouped data to schedule items
+                        tempScheduleMap.forEach { (tanggal, shifts) ->
                             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                             val date = dateFormat.parse(tanggal)
                             val dayFormat = SimpleDateFormat("d", Locale.getDefault())
                             val day = dayFormat.format(date ?: Date())
                             
-                            // Get shift information
-                            val shiftTime = shiftInfo.optString(shift, "-")
+                            // Sort shifts by priority (P -> S -> M -> L)
+                            val sortedShifts = shifts.sortedBy { 
+                                when(it.first) {
+                                    "P" -> 1
+                                    "S" -> 2
+                                    "M" -> 3
+                                    "L" -> 4
+                                    else -> 5
+                                }
+                            }
+                            
+                            // Combine shift information
+                            val combinedShifts = sortedShifts.joinToString("\n") { 
+                                "Shift ${it.first} (${it.second})" 
+                            }
                             
                             scheduleList.add(
                                 ScheduleItem(
                                     day.toInt(),
-                                    shift,
-                                    shiftTime,
-                                    keterangan
+                                    sortedShifts.map { it.first }.joinToString(","),
+                                    combinedShifts,
+                                    ""
                                 )
                             )
                         }
+                        
+                        // Sort by day
+                        scheduleList.sortBy { it.day }
                         
                         // Notify adapter
                         scheduleAdapter.notifyDataSetChanged()
@@ -220,11 +244,12 @@ class ScheduleAdapter(private val context: Context, private val items: List<Sche
         val tvShiftTime = itemView?.findViewById<TextView>(R.id.tvShiftTime)
         
         tvDate?.text = item.day.toString()
-        tvShift?.text = "Shift ${item.shift}"
-        tvShiftTime?.text = item.shiftTime
+        tvShift?.text = item.shiftTime
+        tvShiftTime?.visibility = View.GONE // Hide shift time as it's now included in tvShift
         
-        // Set background color berdasarkan shift
-        val backgroundColor = when (item.shift) {
+        // Set background color berdasarkan shift pertama
+        val firstShift = item.shift.split(",").firstOrNull() ?: "L"
+        val backgroundColor = when (firstShift) {
             "P" -> R.color.shift_pagi
             "S" -> R.color.shift_siang
             "M" -> R.color.shift_malam

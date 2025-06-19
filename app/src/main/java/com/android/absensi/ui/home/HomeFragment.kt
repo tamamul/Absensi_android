@@ -74,7 +74,9 @@ class HomeFragment : Fragment() {
     private var jamMasuk: String? = null
     private var jamKeluar: String? = null
     private var statusAbsensi: String = "belum_absen"
-    private var shift: String = "-"
+    private var currentShift: String = "-"
+    private var jadwalList: List<JSONObject> = listOf()
+    private var shiftStatus: Map<String, JSONObject> = mapOf()
 
     // Timer untuk update jam
     private val handler = Handler(Looper.getMainLooper())
@@ -431,13 +433,18 @@ class HomeFragment : Fragment() {
     }
 
     private fun loadTodayStatus() {
-        // Tampilkan loading
+        // Cek binding null
+        if (_binding == null) return
+        
         binding.tvStatusAbsensi.text = "Memuat status absensi..."
 
         val stringRequest = object : StringRequest(
             Request.Method.POST, urlTodayStatus,
             Response.Listener { response ->
                 try {
+                    // Cek binding null lagi karena mungkin sudah destroy saat response diterima
+                    if (_binding == null) return@Listener
+                    
                     // Cek apakah respons berisi pesan error HTML
                     if (response.contains("<br") || response.contains("<b>Fatal error</b>") || 
                         response.contains("Uncaught") || response.contains("Stack trace")) {
@@ -458,6 +465,7 @@ class HomeFragment : Fragment() {
                         isCheckIn = status.getBoolean("check_in")
                         isCheckOut = status.getBoolean("check_out")
                         statusAbsensi = status.getString("status_kehadiran")
+                        currentShift = data.getString("current_shift")
                         
                         // PENTING: Ambil data lokasi kerja terbaru dari server
                         val lokasiKerjaData = data.getJSONObject("lokasi_kerja")
@@ -478,43 +486,41 @@ class HomeFragment : Fragment() {
                         binding.tvInfoShift.text = "$lokasiKerja"
                         
                         // Jadwal
-                        val jadwal = data.optJSONObject("jadwal")
-                        if (jadwal != null) {
-                            shift = jadwal.getString("shift")
-                            val jamKerja = jadwal.getString("jam_kerja")
-                            // Set shift info
-                            when (shift) {
-                                "P" -> binding.tvShift.text = getString(R.string.shift_p)
-                                "S" -> binding.tvShift.text = getString(R.string.shift_s)
-                                "M" -> binding.tvShift.text = getString(R.string.shift_m)
-                                "L" -> binding.tvShift.text = getString(R.string.shift_l)
-                                else -> binding.tvShift.text = "Tidak ada jadwal"
-                            }
-                            hasJadwalToday = shift != "-" && shift != "L" && shift.isNotEmpty()
-                        } else {
-                            binding.tvShift.text = "Tidak ada jadwal"
-                            hasJadwalToday = false
-                        }
+                        val jadwalArray = data.getJSONArray("jadwal")
+                        jadwalList = List(jadwalArray.length()) { i -> jadwalArray.getJSONObject(i) }
+                        hasJadwalToday = jadwalList.isNotEmpty()
+
+                        // Shift Status dan Info
+                        val shiftStatusObj = data.getJSONObject("shift_status")
+                        val shiftInfo = data.getJSONObject("shift_info")
                         
-                        // Absensi
-                        val absensi = data.optJSONObject("absensi")
-                        if (absensi != null) {
-                            jamMasuk = absensi.optString("jam_masuk", null)
-                            jamKeluar = absensi.optString("jam_keluar", null)
+                        if (hasJadwalToday) {
+                            // Update informasi shift saat ini
+                            val currentShiftInfo = shiftInfo.getString(currentShift)
+                            binding.tvShift.text = "Shift $currentShift ($currentShiftInfo)"
                             
-                            if (!jamMasuk.isNullOrEmpty()) {
-                                binding.tvJamMasuk.text = jamMasuk
-                            } else {
-                                binding.tvJamMasuk.text = "-"
+                            // Tampilkan semua jadwal hari ini
+                            val jadwalText = StringBuilder()
+                            jadwalList.forEach { jadwal ->
+                                val shiftCode = jadwal.getString("shift")
+                                val shiftTime = shiftInfo.getString(shiftCode)
+                                jadwalText.append("Shift $shiftCode: $shiftTime\n")
                             }
+                            binding.tvInfoShift.text = "${lokasiKerja}\n${jadwalText.toString().trim()}"
                             
-                            if (!jamKeluar.isNullOrEmpty() && jamKeluar != "null") {
-                                binding.tvJamKeluar.text = jamKeluar
-                            } else {
-                                binding.tvJamKeluar.text = "-"
-                            }
+                            // Update status absensi untuk shift saat ini
+                            val currentShiftStatus = shiftStatusObj.getJSONObject(currentShift)
+                            isCheckIn = currentShiftStatus.getBoolean("check_in")
+                            isCheckOut = currentShiftStatus.getBoolean("check_out")
+                            jamMasuk = currentShiftStatus.getString("jam_masuk")
+                            jamKeluar = currentShiftStatus.getString("jam_keluar")
+                            statusAbsensi = currentShiftStatus.getString("status_kehadiran")
                             
-                            // Status absensi
+                            // Update UI jam masuk/keluar untuk shift saat ini
+                            binding.tvJamMasuk.text = if (jamMasuk != "null") jamMasuk else "-"
+                            binding.tvJamKeluar.text = if (jamKeluar != "null") jamKeluar else "-"
+                            
+                            // Update status absensi
                             when (statusAbsensi) {
                                 "hadir" -> {
                                     binding.tvStatusAbsensi.text = "Status: Hadir"
@@ -530,9 +536,12 @@ class HomeFragment : Fragment() {
                                 }
                             }
                         } else {
+                            // Tidak ada jadwal hari ini
+                            binding.tvShift.text = "Tidak ada jadwal"
+                            binding.tvInfoShift.text = lokasiKerja
                             binding.tvJamMasuk.text = "-"
                             binding.tvJamKeluar.text = "-"
-                            binding.tvStatusAbsensi.text = "Status: Belum Absen"
+                            binding.tvStatusAbsensi.text = "Status: Tidak ada jadwal"
                             binding.tvStatusAbsensi.setTextColor(ContextCompat.getColor(requireContext(), R.color.gray_text))
                         }
                         
@@ -564,18 +573,22 @@ class HomeFragment : Fragment() {
                         "Terjadi kesalahan: ${e.message}"
                     }
                     
-                    Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_SHORT).show()
-                    binding.tvStatusAbsensi.text = "Status: Error"
-                    binding.tvJamMasuk.text = "-"
-                    binding.tvJamKeluar.text = "-"
+                    if (_binding != null) {
+                        Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_SHORT).show()
+                        binding.tvStatusAbsensi.text = "Status: Error"
+                        binding.tvJamMasuk.text = "-"
+                        binding.tvJamKeluar.text = "-"
+                    }
                 }
             },
             Response.ErrorListener { error ->
-                Log.e("HomeFragment", "Error loading status: ${error.message}", error)
-                Toast.makeText(requireContext(), "Error: ${error.message}", Toast.LENGTH_SHORT).show()
-                binding.tvStatusAbsensi.text = "Status: Error jaringan"
-                binding.tvJamMasuk.text = "-"
-                binding.tvJamKeluar.text = "-"
+                if (_binding != null) {
+                    Log.e("HomeFragment", "Error loading status: ${error.message}", error)
+                    Toast.makeText(requireContext(), "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+                    binding.tvStatusAbsensi.text = "Status: Error jaringan"
+                    binding.tvJamMasuk.text = "-"
+                    binding.tvJamKeluar.text = "-"
+                }
             }) {
             override fun getParams(): Map<String, String> {
                 val params = HashMap<String, String>()
@@ -676,7 +689,7 @@ class HomeFragment : Fragment() {
             .create()
         loadingDialog.show()
         // Log parameter yang dikirim
-        Log.d("HomeFragment", "Check-in Request - satpam_id: $satpamId, lat: $currentLatitude, long: $currentLongitude")
+        Log.d("HomeFragment", "Check-in Request - satpam_id: $satpamId, lat: $currentLatitude, long: $currentLongitude, shift: $currentShift")
         val stringRequest = object : StringRequest(
             Request.Method.POST, urlCheckIn,
             Response.Listener { response ->
@@ -758,6 +771,7 @@ class HomeFragment : Fragment() {
                 params["satpam_id"] = satpamId.toString()
                 params["latitude"] = currentLatitude.toString()
                 params["longitude"] = currentLongitude.toString()
+                params["shift"] = currentShift
                 params["keterangan"] = ""
                 return params
             }
@@ -788,7 +802,7 @@ class HomeFragment : Fragment() {
         loadingDialog.show()
         
         // Log parameter yang dikirim
-        Log.d("HomeFragment", "Check-out Request - satpam_id: $satpamId, lat: $currentLatitude, long: $currentLongitude")
+        Log.d("HomeFragment", "Check-out Request - satpam_id: $satpamId, lat: $currentLatitude, long: $currentLongitude, shift: $currentShift")
         
         val stringRequest = object : StringRequest(
             Request.Method.POST, urlCheckOut,
@@ -872,6 +886,7 @@ class HomeFragment : Fragment() {
                 params["satpam_id"] = satpamId.toString()
                 params["latitude"] = currentLatitude.toString()
                 params["longitude"] = currentLongitude.toString()
+                params["shift"] = currentShift
                 params["keterangan"] = ""
                 return params
             }

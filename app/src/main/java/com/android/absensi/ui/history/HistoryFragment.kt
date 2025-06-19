@@ -135,24 +135,69 @@ class HistoryFragment : Fragment() {
                     if (jsonResponse.getBoolean("success")) {
                         val data = jsonResponse.getJSONObject("data")
                         val absensi = data.getJSONArray("absensi")
+                        val shiftInfo = data.getJSONObject("shift_info")
                         
-                        // Parse data to history items
                         val historyItems = ArrayList<HistoryItem>()
+                        
+                        // Group absensi by tanggal and shift
+                        val absensiMap = mutableMapOf<String, JSONObject>()
+                        
+                        // Proses data absensi dan simpan data terbaru untuk setiap tanggal dan shift
                         for (i in 0 until absensi.length()) {
                             val item = absensi.getJSONObject(i)
-                            
-                            val id = item.getInt("id")
                             val tanggal = item.getString("tanggal")
-                            val jamMasuk = item.optString("jam_masuk", "-")
-                            val jamKeluar = item.optString("jam_keluar", "-")
-                            val status = item.getString("status")
-                            val shift = item.optString("shift", "-")
+                            val shift = item.getString("shift")
+                            val key = "$tanggal-$shift"
+                            
+                            // Ambil data yang sudah ada (jika ada)
+                            val existingItem = absensiMap[key]
+                            
+                            if (existingItem == null) {
+                                // Jika belum ada data untuk kombinasi tanggal-shift ini
+                                absensiMap[key] = item
+                            } else {
+                                // Jika sudah ada, bandingkan timestamp untuk mengambil yang terbaru
+                                val existingTimestamp = existingItem.optString("created_at", "")
+                                val newTimestamp = item.optString("created_at", "")
+                                
+                                if (newTimestamp > existingTimestamp) {
+                                    absensiMap[key] = item
+                                }
+                            }
+                        }
+                        
+                        // Konversi map ke list history items
+                        absensiMap.values.forEach { item ->
+                            val tanggal = item.getString("tanggal")
+                            val shift = item.getString("shift")
+                            val id = item.getInt("id")
                             
                             // Format tanggal
                             val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                             val outputFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
                             val date = inputFormat.parse(tanggal)
                             val formattedDate = date?.let { outputFormat.format(it) } ?: tanggal
+                            
+                            // Get shift time information
+                            val shiftTime = shiftInfo.optString(shift, "")
+                            
+                            // Buat shift label berdasarkan kode shift
+                            val shiftLabel = when(shift) {
+                                "P" -> "Shift Pagi"
+                                "S" -> "Shift Siang"
+                                "M" -> "Shift Malam"
+                                "L" -> "Libur"
+                                else -> "Shift: -"
+                            }
+                            
+                            // Ambil jam masuk dan keluar
+                            val jamMasuk = item.optString("jam_masuk", "-")
+                            val jamKeluar = item.optString("jam_keluar", "-")
+                            val status = item.getString("status")
+                            
+                            // Log untuk debugging
+                            Log.d("HistoryFragment", "Processing item: tanggal=$tanggal, shift=$shift")
+                            Log.d("HistoryFragment", "Jam masuk=$jamMasuk, jam keluar=$jamKeluar")
                             
                             historyItems.add(
                                 HistoryItem(
@@ -161,10 +206,25 @@ class HistoryFragment : Fragment() {
                                     jamMasuk,
                                     jamKeluar,
                                     status,
-                                    shift
+                                    shift,
+                                    "$shiftLabel ($shiftTime)"
                                 )
                             )
                         }
+                        
+                        // Sort by date and shift priority
+                        historyItems.sortWith(compareByDescending<HistoryItem> { 
+                            val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
+                            dateFormat.parse(it.tanggal)
+                        }.thenBy {
+                            when(it.shift) {
+                                "P" -> 1
+                                "S" -> 2
+                                "M" -> 3
+                                "L" -> 4
+                                else -> 5
+                            }
+                        })
                         
                         // Update adapter
                         historyAdapter.setData(historyItems)

@@ -21,7 +21,8 @@
     <color name="green_text">#4CAF50</color>
     <color name="red_text">#F44336</color>
     <color name="orange_text">#FF9800</color>
-    <color name="gray_text">#9E9E9E</color>
+    <color name="blue_text">#3F51B5</color>
+    <color name="gray_text">#757575</color>
     
     <!-- Warna Card Status -->
     <color name="status_hadir">#E8F5E9</color>
@@ -33,4 +34,7 @@
     <!-- Warna Card Lokasi -->
     <color name="light_green">#E8F5E9</color>
     <color name="light_red">#FFEBEE</color>
+    <color name="light_orange">#FFF3E0</color>
+    <color name="light_blue">#E8EAF6</color>
+    <color name="light_gray">#F5F5F5</color>
 </resources>
