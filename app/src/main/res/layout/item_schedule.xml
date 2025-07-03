@@ -1,40 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:layout_width="match_parent"
+    android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="12dp"
-    android:gravity="center">
+    app:cardCornerRadius="18dp"
+    app:cardElevation="2dp"
+    android:layout_margin="4dp"
+    android:backgroundTint="#FFFFFF">
 
-    <TextView
-        android:id="@+id/tvDate"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:background="@drawable/circle_date_bg"
+    <LinearLayout
+        android:layout_width="80dp"
+        android:layout_height="110dp"
+        android:orientation="vertical"
         android:gravity="center"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        tools:text="1" />
+        android:padding="6dp">
 
-    <TextView
-        android:id="@+id/tvShift"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textColor="#333333"
-        android:textSize="12sp"
-        android:textStyle="bold"
-        android:layout_marginTop="8dp"
-        tools:text="Shift P" />
+        <TextView
+            android:id="@+id/tvDay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#3F51B5"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            tools:text="Senin" />
 
-    <TextView
-        android:id="@+id/tvShiftTime"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textColor="#666666"
-        android:textSize="10sp"
-        android:layout_marginTop="4dp"
-        tools:text="07.00 - 15.00" />
+        <TextView
+            android:id="@+id/tvDate"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@drawable/circle_date_bg"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginTop="2dp"
+            tools:text="1" />
 
-</LinearLayout> 
+        <LinearLayout
+            android:id="@+id/layoutShiftChips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:layout_marginTop="8dp" />
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView> 

@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
@@ -22,6 +23,10 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import com.google.android.material.button.MaterialButtonToggleGroup
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import android.widget.ImageView
 
 class ScheduleFragment : Fragment() {
 
@@ -44,6 +49,8 @@ class ScheduleFragment : Fragment() {
     private val yearsList = ArrayList<Int>()
     private val monthsList = ArrayList<String>()
 
+    private lateinit var recyclerViewAdapter: ScheduleListAdapter
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -64,9 +71,29 @@ class ScheduleFragment : Fragment() {
         // Setup spinner bulan dan tahun
         setupSpinners()
 
-        // Setup adapter jadwal
+        // Setup adapter jadwal (grid)
         scheduleAdapter = ScheduleAdapter(requireContext(), scheduleList)
         binding.gridSchedule.adapter = scheduleAdapter
+
+        // Setup adapter jadwal (list)
+        recyclerViewAdapter = ScheduleListAdapter(scheduleList)
+        binding.recyclerViewSchedule.layoutManager = LinearLayoutManager(requireContext())
+        binding.recyclerViewSchedule.adapter = recyclerViewAdapter
+
+        // Toggle mode
+        binding.toggleMode.addOnButtonCheckedListener { group, checkedId, isChecked ->
+            if (isChecked) {
+                if (checkedId == R.id.btnModeCalendar) {
+                    binding.gridSchedule.visibility = View.VISIBLE
+                    binding.recyclerViewSchedule.visibility = View.GONE
+                } else if (checkedId == R.id.btnModeList) {
+                    binding.gridSchedule.visibility = View.GONE
+                    binding.recyclerViewSchedule.visibility = View.VISIBLE
+                }
+            }
+        }
+        // Set default mode
+        binding.toggleMode.check(R.id.btnModeCalendar)
 
         // Load jadwal
         loadSchedule()
@@ -189,6 +216,7 @@ class ScheduleFragment : Fragment() {
                         
                         // Notify adapter
                         scheduleAdapter.notifyDataSetChanged()
+                        recyclerViewAdapter.notifyDataSetChanged()
                     } else {
                         Toast.makeText(requireContext(), "Gagal memuat jadwal", Toast.LENGTH_SHORT).show()
                     }
@@ -236,29 +264,135 @@ class ScheduleAdapter(private val context: Context, private val items: List<Sche
         if (itemView == null) {
             itemView = LayoutInflater.from(context).inflate(R.layout.item_schedule, parent, false)
         }
-        
         val item = items[position]
-        
         val tvDate = itemView?.findViewById<TextView>(R.id.tvDate)
-        val tvShift = itemView?.findViewById<TextView>(R.id.tvShift)
-        val tvShiftTime = itemView?.findViewById<TextView>(R.id.tvShiftTime)
-        
+        val tvDay = itemView?.findViewById<TextView>(R.id.tvDay)
+        val layoutShiftChips = itemView?.findViewById<LinearLayout>(R.id.layoutShiftChips)
+        // Tanggal
         tvDate?.text = item.day.toString()
-        tvShift?.text = item.shiftTime
-        tvShiftTime?.visibility = View.GONE // Hide shift time as it's now included in tvShift
-        
-        // Set background color berdasarkan shift pertama
-        val firstShift = item.shift.split(",").firstOrNull() ?: "L"
-        val backgroundColor = when (firstShift) {
-            "P" -> R.color.shift_pagi
-            "S" -> R.color.shift_siang
-            "M" -> R.color.shift_malam
-            "L" -> R.color.shift_libur
-            else -> R.color.shift_libur
+        // Hari
+        val calendar = Calendar.getInstance()
+        calendar.set(Calendar.DAY_OF_MONTH, item.day)
+        val hari = SimpleDateFormat("EEEE", Locale("id", "ID")).format(calendar.time)
+        tvDay?.text = hari
+        // Hari Minggu warna merah
+        if (hari.lowercase().contains("minggu")) {
+            tvDay?.setTextColor(android.graphics.Color.RED)
+            tvDate?.setBackgroundResource(R.drawable.circle_date_bg_merah)
+        } else {
+            tvDay?.setTextColor(android.graphics.Color.parseColor("#3F51B5"))
+            tvDate?.setBackgroundResource(R.drawable.circle_date_bg)
         }
-        
-        itemView?.setBackgroundResource(backgroundColor)
-        
+        // Bersihkan chip shift
+        layoutShiftChips?.removeAllViews()
+        val shifts = item.shift.split(",")
+        val shiftTimes = item.shiftTime.split("\n")
+        for ((i, shift) in shifts.withIndex()) {
+            val chip = TextView(context)
+            chip.text = if (shift == "L") "Libur" else shiftTimes.getOrNull(i) ?: shift
+            chip.setPadding(0, 0, 0, 0)
+            chip.textAlignment = TextView.TEXT_ALIGNMENT_CENTER
+            chip.gravity = android.view.Gravity.CENTER
+            chip.textSize = if (shift == "L") 16f else 14f
+            chip.setTypeface(null, if (shift == "L") android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            chip.setTextColor(android.graphics.Color.WHITE)
+            chip.setBackgroundResource(when (shift) {
+                "P" -> R.drawable.chip_shift_pagi
+                "S" -> R.drawable.chip_shift_siang
+                "M" -> R.drawable.chip_shift_malam
+                "L" -> R.drawable.chip_shift_libur
+                else -> R.drawable.chip_shift_libur
+            })
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            params.setMargins(0, 0, 0, 0)
+            chip.layoutParams = params
+            layoutShiftChips?.addView(chip)
+        }
         return itemView!!
+    }
+}
+
+// Adapter untuk mode list (RecyclerView)
+class ScheduleListAdapter(private val items: List<ScheduleItem>) : RecyclerView.Adapter<ScheduleListAdapter.ViewHolder>() {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_schedule_list, parent, false)
+        return ViewHolder(view)
+    }
+    override fun getItemCount(): Int = items.size
+    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+        holder.bind(items[position])
+    }
+    class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        fun bind(item: ScheduleItem) {
+            val tvDate = itemView.findViewById<TextView>(R.id.tvDate)
+            val tvDay = itemView.findViewById<TextView>(R.id.tvDay)
+            val layoutShiftChips = itemView.findViewById<LinearLayout>(R.id.layoutShiftChips)
+            val tvKeterangan = itemView.findViewById<TextView>(R.id.tvKeterangan)
+            val icInfo = itemView.findViewById<ImageView>(R.id.icInfo)
+            val bgDateCircle = itemView.findViewById<View>(R.id.bgDateCircle)
+            // Tanggal
+            tvDate?.text = item.day.toString()
+            // Hari
+            val calendar = Calendar.getInstance()
+            calendar.set(Calendar.DAY_OF_MONTH, item.day)
+            val hari = SimpleDateFormat("EEEE", Locale("id", "ID")).format(calendar.time)
+            tvDay?.text = hari
+            // Hari Minggu warna merah, lingkaran tanggal juga merah
+            if (hari.lowercase().contains("minggu")) {
+                tvDay?.setTextColor(android.graphics.Color.RED)
+                tvDate?.setTextColor(android.graphics.Color.WHITE)
+                bgDateCircle?.setBackgroundResource(R.drawable.circle_date_bg_merah)
+            } else {
+                tvDay?.setTextColor(android.graphics.Color.parseColor("#3F51B5"))
+                tvDate?.setTextColor(android.graphics.Color.WHITE)
+                bgDateCircle?.setBackgroundResource(R.drawable.circle_date_bg)
+            }
+            // Bersihkan chip shift
+            layoutShiftChips?.removeAllViews()
+            val shifts = item.shift.split(",")
+            val shiftTimes = item.shiftTime.split("\n")
+            for ((i, shift) in shifts.withIndex()) {
+                val chip = TextView(itemView.context)
+                // Icon shift
+                val icon = when (shift) {
+                    "P" -> "\u2600 " // Matahari
+                    "S" -> "\u26C5 " // Matahari berawan
+                    "M" -> "\uD83C\uDF19 " // Bulan
+                    "L" -> "\u274C " // Silang
+                    else -> ""
+                }
+                chip.text = icon + if (shift == "L") "Libur" else shiftTimes.getOrNull(i) ?: shift
+                chip.setPadding(28, 10, 28, 10)
+                chip.setTextColor(android.graphics.Color.WHITE)
+                chip.textSize = 16f
+                chip.setTypeface(null, if (shift == "L") android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+                chip.setBackgroundResource(when (shift) {
+                    "P" -> R.drawable.chip_shift_pagi
+                    "S" -> R.drawable.chip_shift_siang
+                    "M" -> R.drawable.chip_shift_malam
+                    "L" -> R.drawable.chip_shift_libur
+                    else -> R.drawable.chip_shift_libur
+                })
+                val params = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                params.setMargins(12, 0, 12, 0)
+                chip.layoutParams = params
+                layoutShiftChips?.addView(chip)
+            }
+            // Keterangan
+            if (!item.keterangan.isNullOrEmpty()) {
+                tvKeterangan?.visibility = View.VISIBLE
+                icInfo?.visibility = View.VISIBLE
+                tvKeterangan?.text = "Keterangan: ${item.keterangan}"
+            } else {
+                tvKeterangan?.visibility = View.GONE
+                icInfo?.visibility = View.GONE
+            }
+        }
     }
 } 
