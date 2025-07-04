@@ -333,10 +333,10 @@ class PengajuanAdapter : RecyclerView.Adapter<PengajuanAdapter.ViewHolder>() {
 
             // Set catatan admin jika ada
             if (item.catatanAdmin.isNotEmpty()) {
-                binding.tvCatatan.visibility = View.VISIBLE
+                binding.layoutCatatan.visibility = View.VISIBLE
                 binding.tvCatatan.text = "Catatan: ${item.catatanAdmin}"
             } else {
-                binding.tvCatatan.visibility = View.GONE
+                binding.layoutCatatan.visibility = View.GONE
             }
 
             // Load bukti foto jika ada
