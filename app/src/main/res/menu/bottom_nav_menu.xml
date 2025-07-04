@@ -12,6 +12,11 @@
         android:title="@string/title_schedule" />
 
     <item
+        android:id="@+id/navigation_pengajuan"
+        android:icon="@drawable/ic_pengajuan"
+        android:title="@string/title_pengajuan" />
+
+    <item
         android:id="@+id/navigation_history"
         android:icon="@drawable/ic_history"
         android:title="@string/title_history" />

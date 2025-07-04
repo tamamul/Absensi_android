@@ -18,6 +18,12 @@
         tools:layout="@layout/fragment_schedule" />
 
     <fragment
+        android:id="@+id/navigation_pengajuan"
+        android:name="com.android.absensi.ui.pengajuan.PengajuanFragment"
+        android:label="@string/title_pengajuan"
+        tools:layout="@layout/fragment_pengajuan" />
+
+    <fragment
         android:id="@+id/navigation_history"
         android:name="com.android.absensi.ui.history.HistoryFragment"
         android:label="@string/title_history"

@@ -68,4 +68,7 @@ dependencies {
     
     // CircleImageView untuk gambar profil
     implementation("de.hdodenhof:circleimageview:3.1.0")
+    
+    // OkHttp untuk upload file
+    implementation("com.squareup.okhttp3:okhttp:4.9.1")
 }
