@@ -3,7 +3,6 @@ package com.android.absensi.ui.home
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -13,12 +12,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.android.absensi.R
 import com.android.volley.AuthFailureError
 import com.android.volley.DefaultRetryPolicy
@@ -32,10 +29,7 @@ import com.android.volley.TimeoutError
 import com.android.volley.toolbox.StringRequest
 import com.android.volley.toolbox.Volley
 import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
@@ -75,8 +69,10 @@ class HomeFragment : Fragment() {
     private var jamKeluar: String? = null
     private var statusAbsensi: String = "belum_absen"
     private var currentShift: String = "-"
+    private var currentShiftEndTime = "23:59"
     private var jadwalList: List<JSONObject> = listOf()
     private var shiftStatus: Map<String, JSONObject> = mapOf()
+    private var canCheckOut = false
 
     // Timer untuk update jam
     private val handler = Handler(Looper.getMainLooper())
@@ -466,6 +462,7 @@ class HomeFragment : Fragment() {
                         isCheckOut = status.getBoolean("check_out")
                         statusAbsensi = status.getString("status_kehadiran")
                         currentShift = data.getString("current_shift")
+                        canCheckOut = status.getBoolean("can_check_out")
                         
                         // PENTING: Ambil data lokasi kerja terbaru dari server
                         val lokasiKerjaData = data.getJSONObject("lokasi_kerja")
@@ -498,6 +495,16 @@ class HomeFragment : Fragment() {
                             // Update informasi shift saat ini
                             val currentShiftInfo = shiftInfo.getString(currentShift)
                             binding.tvShift.text = "Shift $currentShift ($currentShiftInfo)"
+
+                            // Cek apakah shift info mengandung jam selesai
+                            if (currentShiftInfo.contains(" - ")) {
+                                try {
+                                    currentShiftEndTime = currentShiftInfo.split(" - ")[1]; // Ambil bagian kedua "15:00"
+                                } catch (e: Exception) {
+                                    currentShiftEndTime = "23:59"; // Fallback
+                                    Log.e("HomeFragment", "Gagal parse jam selesai shift: $currentShiftInfo");
+                                }
+                            }
                             
                             // Tampilkan semua jadwal hari ini
                             val jadwalText = StringBuilder()
@@ -543,6 +550,9 @@ class HomeFragment : Fragment() {
                             binding.tvJamKeluar.text = "-"
                             binding.tvStatusAbsensi.text = "Status: Tidak ada jadwal"
                             binding.tvStatusAbsensi.setTextColor(ContextCompat.getColor(requireContext(), R.color.gray_text))
+
+                            // Set currentShiftEndTime ke default
+                            currentShiftEndTime = "23:59";
                         }
                         
                         // Update button status
@@ -630,6 +640,7 @@ class HomeFragment : Fragment() {
                 Toast.makeText(requireContext(), "Tidak ada jadwal hari ini!", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+
             // Ambil lokasi terbaru sebelum check-in
             getCurrentLocation()
             // Tampilkan loading dialog
@@ -658,19 +669,27 @@ class HomeFragment : Fragment() {
             }
             // Ambil lokasi terbaru sebelum check-out
             getCurrentLocation()
-            // Tampilkan loading dialog
-            val loadingDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                .setTitle("Memproses")
-                .setMessage("Memproses Check-Out...")
-                .setCancelable(false)
-                .create()
-            loadingDialog.show()
-            // Pura-pura loading sebentar untuk UX
-            Handler(Looper.getMainLooper()).postDelayed({
-                loadingDialog.dismiss()
-                // Proses check-out
-                proceedCheckOut()
-            }, 1000)
+
+            // LOGIKA BARU: Cek apakah sudah waktunya checkout
+            if (canCheckOut) {
+                // Jika YA, langsung proses checkout tanpa keterangan
+                // Tampilkan loading dialog
+                val loadingDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle("Memproses")
+                    .setMessage("Memproses Check-Out...")
+                    .setCancelable(false)
+                    .create()
+                loadingDialog.show()
+                // Pura-pura loading sebentar untuk UX
+                Handler(Looper.getMainLooper()).postDelayed({
+                    loadingDialog.dismiss()
+                    // Proses check-out
+                    proceedCheckOut("")
+                }, 1000)
+            } else {
+                // Jika TIDAK, tampilkan dialog untuk mengisi keterangan
+                showEarlyCheckoutDialog()
+            }
         }
     }
 
@@ -785,7 +804,7 @@ class HomeFragment : Fragment() {
         Volley.newRequestQueue(requireContext()).add(stringRequest)
     }
 
-    private fun proceedCheckOut() {
+    private fun proceedCheckOut(keterangan: String) {
         // Validasi lokasi
         if (currentLatitude == 0.0 || currentLongitude == 0.0) {
             Toast.makeText(requireContext(), "Lokasi tidak valid! Pastikan GPS aktif.", Toast.LENGTH_SHORT).show()
@@ -800,9 +819,9 @@ class HomeFragment : Fragment() {
             .setCancelable(false)
             .create()
         loadingDialog.show()
-        
-        // Log parameter yang dikirim
-        Log.d("HomeFragment", "Check-out Request - satpam_id: $satpamId, lat: $currentLatitude, long: $currentLongitude, shift: $currentShift")
+
+        // Log parameter yang dikirim (termasuk keterangan)
+        Log.d("HomeFragment", "Check-out Request - satpam_id: $satpamId, lat: $currentLatitude, long: $currentLongitude, shift: $currentShift, keterangan: '$keterangan'")
         
         val stringRequest = object : StringRequest(
             Request.Method.POST, urlCheckOut,
@@ -839,6 +858,18 @@ class HomeFragment : Fragment() {
                             binding.tvJamKeluar.text = jamKeluar
                         } else {
                             binding.tvJamKeluar.text = "-"
+                        }
+
+                        // Log informasi tambahan dari response
+                        if (data.has("is_pulang_awal")) {
+                            val isPulangAwal = data.getBoolean("is_pulang_awal")
+                            val keteranganSaved = data.optString("keterangan", "")
+                            Log.d("HomeFragment", "Pulang awal: $isPulangAwal, Keterangan tersimpan: '$keteranganSaved'")
+
+                            // Tampilkan pesan tambahan jika pulang awal
+                            if (isPulangAwal && keteranganSaved.isNotEmpty()) {
+                                Toast.makeText(requireContext(), "Keterangan pulang awal tersimpan", Toast.LENGTH_SHORT).show()
+                            }
                         }
                         
                         // Reload status untuk memastikan data terbaru
@@ -887,7 +918,14 @@ class HomeFragment : Fragment() {
                 params["latitude"] = currentLatitude.toString()
                 params["longitude"] = currentLongitude.toString()
                 params["shift"] = currentShift
-                params["keterangan"] = ""
+                params["keterangan"] = keterangan
+
+                // Log semua parameter yang dikirim
+                Log.d("HomeFragment", "Sending parameters:")
+                params.forEach { (key, value) ->
+                    Log.d("HomeFragment", "$key: '$value'")
+                }
+
                 return params
             }
         }
@@ -900,6 +938,44 @@ class HomeFragment : Fragment() {
         )
         
         Volley.newRequestQueue(requireContext()).add(stringRequest)
+    }
+
+    private fun showEarlyCheckoutDialog() {
+        val builder = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+        builder.setTitle("Keterangan Pulang Awal")
+        builder.setMessage("Anda check-out lebih awal. Mohon isi alasan Anda.")
+
+        // Buat EditText untuk input keterangan
+        val input = android.widget.EditText(requireContext())
+        input.hint = "Contoh: Urusan keluarga mendadak"
+        input.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        input.maxLines = 3
+        builder.setView(input)
+
+        // Tombol "Kirim" pada dialog
+        builder.setPositiveButton("Kirim") { dialog, _ ->
+            val keterangan = input.text.toString().trim()
+            if (keterangan.isNotEmpty()) {
+                // Validasi panjang keterangan
+                if (keterangan.length > 255) {
+                    Toast.makeText(requireContext(), "Keterangan terlalu panjang (maksimal 255 karakter)", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                Log.d("HomeFragment", "Keterangan yang diinput: '$keterangan'")
+                // Kirim request checkout dengan keterangan
+                proceedCheckOut(keterangan)
+            } else {
+                Toast.makeText(requireContext(), "Keterangan tidak boleh kosong!", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        // Tombol "Batal"
+        builder.setNegativeButton("Batal") { dialog, _ ->
+            dialog.cancel()
+        }
+
+        builder.show()
     }
 
     override fun onDestroyView() {

@@ -5,7 +5,7 @@
     <string name="title_history">Riwayat</string>
     <string name="title_profile">Profil</string>
     <string name="title_pengajuan">Pengajuan</string>
-    <string name="ip_api">http://192.168.1.155/absensi/api_android/</string>
+    <string name="ip_api">http://192.168.1.98/Absensi_backend/api_android/</string>
     
     <!-- Login dan Register -->
     <string name="hint_nik">NIK</string>
