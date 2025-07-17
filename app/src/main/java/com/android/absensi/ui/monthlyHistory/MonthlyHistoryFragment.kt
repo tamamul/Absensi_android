@@ -219,10 +219,11 @@ class MonthlyHistoryFragment : Fragment() {
                 else -> "Lainnya"
             }
 
-            val (statusType, statusText) = if (isLate(jamMasuk, shift)) {
-                Pair(StatusType.TERLAMBAT, "Terlambat")
+            val statusType = StatusType.HADIR
+            val statusText = if (isLate(jamMasuk, shift)) {
+                "Hadir (Terlambat)" // Beri keterangan tambahan
             } else {
-                Pair(StatusType.HADIR, "Hadir")
+                "Hadir"
             }
 
             val sortPriority = when(shift) {
@@ -314,7 +315,6 @@ class MonthlyHistoryFragment : Fragment() {
             binding.summaryCard.visibility = View.GONE
         } else {
             var totalHadir = 0
-            var totalTerlambat = 0
             var totalSakit = 0
             var totalIzinCuti = 0
             var totalAlpha = 0
@@ -322,7 +322,6 @@ class MonthlyHistoryFragment : Fragment() {
             for (item in allEvents) {
                 when (item.status) {
                     StatusType.HADIR -> totalHadir++
-                    StatusType.TERLAMBAT -> totalTerlambat++
                     StatusType.SAKIT -> totalSakit++
                     StatusType.IZIN, StatusType.CUTI, StatusType.PULANG_CEPAT -> totalIzinCuti++
                     StatusType.ALPHA -> totalAlpha++
