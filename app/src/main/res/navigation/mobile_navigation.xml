@@ -30,6 +30,12 @@
         tools:layout="@layout/fragment_history" />
 
     <fragment
+        android:id="@+id/navigation_monthly_history"
+        android:name="com.android.absensi.ui.monthlyHistory.MonthlyHistoryFragment"
+        android:label="@string/title_monthly_history"
+        tools:layout="@layout/fragment_monthly_history" />
+
+    <fragment
         android:id="@+id/navigation_profile"
         android:name="com.android.absensi.ui.profile.ProfileFragment"
         android:label="@string/title_profile"
