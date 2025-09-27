@@ -101,7 +101,7 @@ class RegisterActivity : AppCompatActivity() {
                             }
                         }
                     } else {
-                        Toast.makeText(this, "Gagal memuat data lokasi", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Duh! Gagal memuat data lokasi", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     Log.e("LocationError", "Error parsing JSON: ${e.message}")
@@ -124,7 +124,7 @@ class RegisterActivity : AppCompatActivity() {
 
         // Validasi input
         if (email.isEmpty() || nip.isEmpty() || nama.isEmpty()) {
-            Toast.makeText(this, "Mohon isi semua field", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Tulung isi semua field", Toast.LENGTH_SHORT).show()
             return
         }
         
