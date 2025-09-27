@@ -2,9 +2,9 @@ name: Build Android APK (Debug)
 
 on:
   workflow_dispatch: # bisa dijalankan manual
-  push:
-    branches:
-      - master
+  #push:
+   # branches:
+   #   - master
 
 jobs:
   build:
