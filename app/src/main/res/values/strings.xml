@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Absensi Marsa</string>
-    <string name="title_home">Home</string>
+    <string name="title_home">MARSA</string>
     <string name="title_schedule">Jadwal</string>
     <string name="title_history">Riwayat</string>
     <string name="title_monthly_history">Riwayat Bulanan</string>
