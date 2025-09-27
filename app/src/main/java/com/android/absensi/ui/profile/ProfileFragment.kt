@@ -42,7 +42,7 @@ class ProfileFragment : Fragment() {
     private var nip: String = ""
     private var nama: String = ""
     private var lokasiKerja: String = ""
-    private var jabatan: String = "Satpam"
+    private var jabatan: String = "Guru Karyawan"
     private var noHp: String = ""
     private var email: String = ""
     private var alamat: String = ""
@@ -97,7 +97,7 @@ class ProfileFragment : Fragment() {
         nik = sharedPref.getString("nik", "") ?: ""
         nip = sharedPref.getString("nip", "") ?: ""
         nama = sharedPref.getString("nama", "") ?: ""
-        jabatan = sharedPref.getString("jabatan", "Satpam") ?: "Satpam"
+        jabatan = sharedPref.getString("jabatan", "Guru Karyawan") ?: "Guru Karyawan"
         lokasiKerja = sharedPref.getString("lokasi_nama", "") ?: ""
         foto = sharedPref.getString("foto", "") ?: ""
     }
