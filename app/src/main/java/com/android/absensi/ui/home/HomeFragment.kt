@@ -104,7 +104,7 @@ class HomeFragment : Fragment() {
         if (locationPermissionGranted) {
             getCurrentLocation()
         } else {
-            Toast.makeText(requireContext(), "Izin lokasi diperlukan untuk absensi", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Izin lokasi wajib hukume untuk absensi", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -187,7 +187,7 @@ class HomeFragment : Fragment() {
         Log.d("HomeFragment", "========================================")
         
         // Update UI langsung
-        binding.tvWelcome.text = "Halo, $nama!"
+        binding.tvWelcome.text = "Assalamualaikum, $nama!"
         binding.tvLokasi.text = "Lokasi: $lokasiKerja"
         binding.tvInfoShift.text = "$lokasiKerja"
         
@@ -232,7 +232,7 @@ class HomeFragment : Fragment() {
             // Tampilkan penjelasan mengapa izin lokasi diperlukan
             Toast.makeText(
                 requireContext(),
-                "Izin lokasi diperlukan untuk fitur absensi berbasis lokasi",
+                "Punten, izin lokasi diperlukan untuk fitur absensi berbasis lokasi",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -323,12 +323,12 @@ class HomeFragment : Fragment() {
                         binding.cardLokasi.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red))
                         
                         Log.e("HomeFragment", "Tidak dapat memperoleh lokasi GPS")
-                        Toast.makeText(requireContext(), "Tidak dapat memperoleh lokasi. Aktifkan GPS Anda.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "Tidak dapat memperoleh lokasi. tulung uripna GPS e.", Toast.LENGTH_SHORT).show()
                     }
                 }
             }.addOnFailureListener { e ->
                 Log.e("HomeFragment", "Gagal mendapatkan lokasi: ${e.message}", e)
-                binding.tvStatusLokasi.text = "Error: Gagal mendapatkan lokasi"
+                binding.tvStatusLokasi.text = "Duh!!: Gagal mendapatkan lokasi"
                 binding.tvStatusLokasi.setTextColor(ContextCompat.getColor(requireContext(), R.color.red_text))
                 binding.cardLokasi.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.light_red))
                 Toast.makeText(requireContext(), "Error mendapatkan lokasi: ${e.message}", Toast.LENGTH_SHORT).show()
