@@ -65,7 +65,7 @@ class LoginActivity : AppCompatActivity() {
 
         // Validasi input
         if (email.isEmpty() || nip.isEmpty()) {
-            Toast.makeText(this, "Mohon isi Email dan NIP", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Email dan NIP e diisi lurr!", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -131,7 +131,7 @@ class LoginActivity : AppCompatActivity() {
                         startActivity(intent)
                         finish()
 
-                        Toast.makeText(this, "Selamat datang, $nama", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Sugeng rawuh, $nama", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
                     }
