@@ -4,7 +4,7 @@ on:
   workflow_dispatch: # bisa dijalankan manual
   push:
     branches:
-      - main
+      - master
 
 jobs:
   build:
