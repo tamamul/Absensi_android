@@ -1,5 +1,16 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:height="24dp" android:tint="#000000" android:viewportHeight="24" android:viewportWidth="24" android:width="24dp">
-      
-    <path android:fillColor="@android:color/white" android:pathData="M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12L21,5l-9,-4zM12,11.99h7c-0.53,4.12 -3.28,7.79 -7,8.94L12,12L5,12L5,6.3l7,-3.11v8.8z"/>
-    
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Background lingkaran -->
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M24,0a24,24 0 1,0 0,48a24,24 0 1,0 0,-48z"/>
+
+    <!-- Huruf M putih -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M14,34 L14,14 L20,14 L24,26 L28,14 L34,14 L34,34 L28,34 L28,22 L24,34 L20,22 L20,34z"/>
 </vector>
