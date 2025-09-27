@@ -46,7 +46,7 @@ class PengajuanFragment : Fragment() {
     private var selectedImageUri: Uri? = null
     private val PICK_IMAGE_REQUEST = 1
     
-    private val jenisPengajuan = arrayOf("Izin", "Sakit", "Cuti", "Pulang Cepat")
+    private val jenisPengajuan = arrayOf("Izin", "Sakit", "Cuti", "Pulang Cepat", "Kenduren", "Taziyah" )
     private lateinit var pengajuanAdapter: PengajuanAdapter
 
     override fun onCreateView(
@@ -130,7 +130,7 @@ class PengajuanFragment : Fragment() {
         val alasan = binding.edtAlasan.text.toString()
 
         if (jenis.isEmpty() || tanggalMulai.isEmpty() || tanggalSelesai.isEmpty() || alasan.isEmpty()) {
-            Toast.makeText(context, "Semua field harus diisi", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Semua field harus diisi lur!", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -140,6 +140,8 @@ class PengajuanFragment : Fragment() {
             "Sakit" -> "sakit"
             "Cuti" -> "cuti"
             "Pulang Cepat" -> "pulang_cepat"
+            "Kenduren" -> "Kenduren"
+            "Taziyah" -> "Taziyah"
             else -> "izin"
         }
 
@@ -179,7 +181,7 @@ class PengajuanFragment : Fragment() {
                     try {
                         val jsonObject = JSONObject(responseData)
                         if (jsonObject.getBoolean("success")) {
-                            Toast.makeText(context, "Pengajuan berhasil dikirim", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "oke.. Pengajuan berhasil dikirim", Toast.LENGTH_SHORT).show()
                             clearForm()
                             loadRiwayatPengajuan()
                         } else {
@@ -305,6 +307,8 @@ class PengajuanAdapter : RecyclerView.Adapter<PengajuanAdapter.ViewHolder>() {
                 "sakit" -> "Sakit"
                 "cuti" -> "Cuti"
                 "pulang_cepat" -> "Pulang Cepat"
+                "kenduren" -> "Kenduren"
+                "taziyah" -> "Taziyah"
                 else -> item.jenisPengajuan
             }
 
@@ -319,9 +323,9 @@ class PengajuanAdapter : RecyclerView.Adapter<PengajuanAdapter.ViewHolder>() {
 
             // Set status dengan warna yang sesuai
             binding.tvStatus.text = when(item.status) {
-                "pending" -> "Pending"
-                "disetujui" -> "Disetujui"
-                "ditolak" -> "Ditolak"
+                "pending" -> "⏳ Tunggu"
+                "disetujui" -> "👍 Monggo"
+                "ditolak" -> "🤬 Mboten Pareng"
                 else -> item.status
             }
             binding.tvStatus.setBackgroundResource(when(item.status) {
