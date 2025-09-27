@@ -20,6 +20,10 @@ jobs:
           distribution: temurin
           java-version: 17
       # 👉 Tambahin di sini
+      
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
       - name: Clear Gradle cache
         run: |
           rm -rf ~/.gradle/caches
