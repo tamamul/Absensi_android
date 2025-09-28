@@ -52,7 +52,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Data Satpam"
+                    android:text="Data Guru Karyawan"
                     android:textColor="#3F51B5"
                     android:textSize="18sp"
                     android:textStyle="bold"
@@ -63,7 +63,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/label_nik"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
 
                 <EditText
                     android:id="@+id/etNik"
@@ -121,7 +121,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="8dp"
                     android:padding="8dp"
-                    android:text="Satpam"
+                    android:text="Guru Karyawan"
                     android:textSize="16sp" />
 
                 <!-- Lokasi Kerja -->
